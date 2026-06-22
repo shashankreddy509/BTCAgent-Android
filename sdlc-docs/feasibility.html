@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Trading — Native Android App Feasibility</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#141923; --panel2:#1b212e; --line:#262e3d;
+    --txt:#e6e9ef; --mut:#8b97ad; --accent:#f7931a; --green:#34d399;
+    --amber:#fbbf24; --red:#f87171; --blue:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px;}
+  header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:32px;}
+  h1{margin:0 0 6px;font-size:30px;letter-spacing:-.5px;}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--mut);font-size:15px;}
+  .tldr{background:linear-gradient(135deg,#1a2030,#141923);border:1px solid var(--line);
+    border-left:4px solid var(--green);border-radius:12px;padding:18px 20px;margin:24px 0 36px;}
+  .tldr b{color:var(--green)}
+  h2{font-size:20px;margin:42px 0 14px;display:flex;align-items:center;gap:10px;}
+  h2 .n{background:var(--accent);color:#000;font-size:13px;font-weight:700;
+    width:26px;height:26px;border-radius:7px;display:grid;place-items:center;}
+  .grid{display:grid;gap:14px;}
+  .cols2{grid-template-columns:1fr 1fr;}
+  @media(max-width:760px){.cols2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
+  .card h3{margin:0 0 8px;font-size:15px;color:var(--blue);}
+  table{width:100%;border-collapse:collapse;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px;}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{background:var(--panel2);color:var(--mut);font-weight:600;font-size:12px;
+    text-transform:uppercase;letter-spacing:.5px;}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;}
+  .ok{background:rgba(52,211,153,.15);color:var(--green)}
+  .warn{background:rgba(251,191,36,.15);color:var(--amber)}
+  .no{background:rgba(248,113,113,.15);color:var(--red)}
+  .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;}
+  .node{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:10px 14px;font-size:13px;text-align:center;}
+  .node b{display:block;color:var(--accent);font-size:13px;}
+  .node small{color:var(--mut)}
+  .arrow{color:var(--mut);font-size:18px}
+  code{background:#0c1119;border:1px solid var(--line);border-radius:5px;
+    padding:1px 6px;font-size:13px;color:var(--green);font-family:ui-monospace,Menlo,monospace;}
+  ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
+  .risk{counter-reset:r;list-style:none;padding:0}
+  .risk li{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
+    border-radius:9px;padding:12px 14px 12px 46px;position:relative;margin:9px 0;}
+  .risk li::before{counter-increment:r;content:counter(r);position:absolute;left:12px;top:12px;
+    width:22px;height:22px;background:var(--amber);color:#000;border-radius:6px;
+    font-weight:700;font-size:12px;display:grid;place-items:center;}
+  .phase{display:flex;gap:12px;align-items:flex-start;margin:10px 0;}
+  .ptag{flex:none;width:74px;font-weight:700;color:var(--accent);font-size:13px;padding-top:2px;}
+  .foot{margin-top:50px;border-top:1px solid var(--line);padding-top:18px;color:var(--mut);font-size:13px;}
+  .tag{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1><span>₿</span> BTC Trading — Native Android App <span style="color:var(--mut);font-weight:400">/ Feasibility</span></h1>
+  <div class="sub">Mirroring the existing <b>BTC AI Agent</b> web dashboard as a native Kotlin/Compose app.</div>
+</header>
+
+<div class="tldr">
+  <b>TL;DR — Highly feasible.</b> Backend already exposes a clean REST + WebSocket API behind Firebase Auth.
+  The Android app is a <b>thin native client</b> over that API — <b>no backend rewrite.</b>
+  Main work: rebuild the SPA's ~16 pages as Compose screens + wire Firebase Google sign-in to mint the
+  bearer token the API already expects. Main bottlenecks: live-trading risk on mobile, background limits,
+  and a couple of OAuth/redirect flows that don't map cleanly to native.
+</div>
+
+<h2><span class="n">1</span> What the bot does</h2>
+<div class="grid cols2">
+  <div class="card">
+    <h3>Stack &amp; deploy</h3>
+    <div class="tag">Python 3.12 · FastAPI · Firebase/Firestore · Anthropic Claude · ccxt</div>
+    <ul>
+      <li>EC2 <code>ap-south-1</code> → Nginx → :8000</li>
+      <li>Domain <code>btc.gshashank.com</code></li>
+      <li>Auth: Firebase Google sign-in → bearer ID token, owner/admin + approved-email gate</li>
+      <li>Scanner loop runs <b>server-side</b> — phone only observes/controls</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Brokers wired (live)</h3>
+    <div class="flow">
+      <span class="node">coinbase</span><span class="node">binance</span><span class="node">bybit</span>
+      <span class="node">coindcx</span><span class="node">delta</span><span class="node">pepperstone</span>
+    </div>
+    <div class="tag">Pepperstone uses an OAuth redirect flow (needs Custom Tab on mobile).</div>
+  </div>
+</div>
+
+<h3 style="margin:22px 0 8px;color:var(--blue)">16 dashboard pages</h3>
+<table>
+<tr><th>Page</th><th>Does</th><th>Page</th><th>Does</th></tr>
+<tr><td>Dashboard</td><td>Live price, positions, P&amp;L</td><td>VP</td><td>Volume/Session profile, naked POCs</td></tr>
+<tr><td>Trading</td><td>Start/stop scanner, position cards</td><td>Vishal</td><td>6 GTI-zone strategy detections</td></tr>
+<tr><td>Scanner</td><td>Candlestick pattern hits across TFs</td><td>Analysis</td><td>Win-rate, expectancy, drawdown</td></tr>
+<tr><td>Manual</td><td>Discretionary entries / limits</td><td>Reports</td><td>Signals + positions + history</td></tr>
+<tr><td>Liquidity</td><td>CoinGlass liq-cluster heatmap</td><td>Briefing</td><td>AI morning briefing (Claude)</td></tr>
+<tr><td>OI</td><td>Native Open Interest aggregator</td><td>Settings</td><td>App + user config / keys</td></tr>
+<tr><td>Regime</td><td>Daily Markov regime (Bull/Bear/Side)</td><td>Users</td><td>Admin: approve, set mode, stop</td></tr>
+<tr><td>Markov</td><td>Multi-ticker transition matrices</td><td>Guide/Support</td><td>Static help</td></tr>
+</table>
+
+<h2><span class="n">2</span> Auth &amp; data flow (the whole pipe)</h2>
+<div class="card">
+  <div class="flow">
+    <div class="node"><b>Android</b><small>Compose UI</small></div><span class="arrow">→</span>
+    <div class="node"><b>Firebase SDK</b><small>Google sign-in</small></div><span class="arrow">→</span>
+    <div class="node"><b>ID token</b><small>getIdToken()</small></div><span class="arrow">→</span>
+    <div class="node"><b>OkHttp interceptor</b><small>Bearer header</small></div><span class="arrow">→</span>
+    <div class="node"><b>FastAPI</b><small>/api/* verify_token</small></div>
+  </div>
+  <div class="flow" style="margin-top:4px">
+    <div class="node"><b>WS /ws/price</b><small>live push</small></div><span class="arrow">→</span>
+    <div class="node"><b>StateFlow</b><small>recompose</small></div>
+    <span style="margin:0 8px;color:var(--mut)">·</span>
+    <div class="node"><b>FCM</b><small>trade alerts (new)</small></div>
+  </div>
+  <div class="tag">Same identity provider as web → the existing token works unchanged for read + most writes.</div>
+</div>
+
+<h2><span class="n">3</span> Feasibility per feature</h2>
+<table>
+<tr><th>Feature</th><th>Feasible</th><th>Notes</th></tr>
+<tr><td>Google sign-in / token</td><td><span class="pill ok">Easy</span></td><td>Firebase Android SDK = same provider</td></tr>
+<tr><td>Live price (WebSocket)</td><td><span class="pill ok">Easy</span></td><td>OkHttp WS → Compose state</td></tr>
+<tr><td>Dashboard / positions / reports</td><td><span class="pill ok">Easy</span></td><td>Pure REST GET → cards/lists</td></tr>
+<tr><td>Scanner / OI / regime / Markov / VP / liquidity</td><td><span class="pill ok">Easy–Med</span></td><td>REST GET; charts need a chart lib</td></tr>
+<tr><td>Settings (app/user)</td><td><span class="pill ok">Med</span></td><td>Respect masked-field <code>****</code> rules</td></tr>
+<tr><td>Start/stop scanner, autostart</td><td><span class="pill ok">Med</span></td><td>POST; surface state via WS/poll</td></tr>
+<tr><td>Manual entry / limit / edit / cancel</td><td><span class="pill ok">Med</span></td><td>Needs careful confirm UX (real money)</td></tr>
+<tr><td>Live order execution</td><td><span class="pill warn">Med–High</span></td><td>Irreversible → biometric + confirm gate</td></tr>
+<tr><td>Trade-event alerts</td><td><span class="pill ok">Med</span></td><td>Add FCM; backend now pushes Telegram</td></tr>
+<tr><td>Admin (users / approve / mode)</td><td><span class="pill ok">Med</span></td><td>Admin-gated REST</td></tr>
+<tr><td>Pepperstone OAuth</td><td><span class="pill warn">Med</span></td><td>Custom Tab + deep-link callback</td></tr>
+<tr><td>Run scanner loop on device</td><td><span class="pill no">N/A</span></td><td>Runs on EC2 — app observes, never runs the loop</td></tr>
+</table>
+
+<h2><span class="n">4</span> Bottlenecks / risks</h2>
+<ul class="risk">
+  <li><b>Live-money execution on a phone</b> — fat-finger / lost network mid-order. Mitigate: biometric gate, explicit confirm, default paper mode, server-side order idempotency.</li>
+  <li><b>FCM push not built yet</b> — alerts go to Telegram/email today. Need device-token register endpoint + FCM send path (small backend add).</li>
+  <li><b>Android background limits</b> — OS kills background sockets. Live WS only foreground; rely on FCM when backgrounded.</li>
+  <li><b>Pepperstone OAuth redirect</b> — web-redirect callback needs a mobile deep-link bridge + whitelisted callback URL.</li>
+  <li><b>Masked secrets</b> — GET settings returns <code>****</code>; never display/resend masked values as real.</li>
+  <li><b>Allowed-email gate</b> — handle <code>access/check</code> 403 with a clean "pending approval" screen.</li>
+  <li><b>Token expiry (~1h)</b> — interceptor must refresh on 401 and retry.</li>
+  <li><b>Chart parity</b> — heatmap / volume-profile / OI visuals are non-trivial natively; ship simplified first.</li>
+  <li><b>API shaped for the SPA</b> — no mobile contract/versioning yet; consider <code>/api/mobile/*</code> if web &amp; app diverge later.</li>
+</ul>
+
+<h2><span class="n">5</span> Suggested phasing</h2>
+<div class="card">
+  <div class="phase"><div class="ptag">Phase 0</div><div>Auth + allowed-email gate + live price — proves the whole pipe end-to-end.</div></div>
+  <div class="phase"><div class="ptag">Phase 1</div><div><b>Read-only:</b> dashboard, positions, reports, scanner, briefing, regime/OI/Markov views.</div></div>
+  <div class="phase"><div class="ptag">Phase 2</div><div><b>Control:</b> start/stop scanner, settings, manual entries (paper-first), confirm UX.</div></div>
+  <div class="phase"><div class="ptag">Phase 3</div><div><b>Live trading:</b> execution + biometric gate + FCM alerts (needs device-token backend add).</div></div>
+  <div class="phase"><div class="ptag">Phase 4</div><div>Admin panel, Pepperstone OAuth, advanced charts.</div></div>
+</div>
+
+<h2><span class="n">6</span> Small backend additions needed</h2>
+<div class="grid cols2">
+  <div class="card"><h3>FCM device tokens</h3>Register endpoint + send path so mobile gets trade alerts (replaces Telegram on device).</div>
+  <div class="card"><h3>Mobile OAuth callback</h3>Deep-link callback for Pepperstone redirect flow.</div>
+  <div class="card"><h3>Order idempotency</h3>Optional keys to make mobile retries safe on flaky networks.</div>
+  <div class="card"><h3>Everything else</h3>Reachable <b>today</b> through the existing REST + WS API. No rewrite.</div>
+</div>
+
+<div class="foot">
+  Recommended Android stack: <b>Kotlin · Jetpack Compose · Material 3 · MVVM/StateFlow · Retrofit + OkHttp · Firebase Auth + FCM · Vico/MPAndroidChart</b>. minSdk 26+.<br>
+  Source of truth: <code>/Users/shashankreddyganta/Documents/btc-ai-agent</code> · Full write-up in <code>README.md</code>.
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Android App — SDLC</title>
+<style>
+  :root{
+    --bg:#0b0e14;--panel:#141923;--panel2:#1b212e;--line:#262e3d;
+    --txt:#e6e9ef;--mut:#8b97ad;--accent:#f7931a;--green:#34d399;
+    --amber:#fbbf24;--red:#f87171;--blue:#60a5fa;--purple:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px;}
+  header{border-bottom:1px solid var(--line);padding-bottom:24px;margin-bottom:18px;}
+  h1{margin:0 0 6px;font-size:30px;letter-spacing:-.5px;}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--mut);font-size:15px;}
+  .here{background:linear-gradient(135deg,#1a2030,#141923);border:1px solid var(--line);
+    border-left:4px solid var(--amber);border-radius:12px;padding:16px 20px;margin:22px 0 30px;}
+  .here b{color:var(--amber)}
+
+  /* progress rail */
+  .rail{display:flex;gap:6px;margin:26px 0 36px;flex-wrap:wrap;}
+  .step{flex:1 1 120px;min-width:120px;border-radius:10px;padding:10px 12px;border:1px solid var(--line);
+    background:var(--panel);position:relative;}
+  .step.done{border-color:var(--green)}
+  .step.next{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
+  .step .ph{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;}
+  .step .nm{font-weight:700;font-size:14px;margin-top:2px;}
+  .step .st{font-size:12px;margin-top:4px;}
+  .done .st{color:var(--green)} .next .st{color:var(--amber)} .todo .st{color:var(--mut)}
+
+  .phase{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 20px;margin:18px 0;}
+  .phase.next{border-color:var(--amber)}
+  .phase h2{margin:0 0 4px;font-size:20px;display:flex;align-items:center;gap:10px;}
+  .phase h2 .num{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;
+    font-size:14px;font-weight:700;color:#000;background:var(--accent);}
+  .phase h2 .tag{margin-left:auto;font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;}
+  .tag.done{background:rgba(52,211,153,.15);color:var(--green)}
+  .tag.next{background:rgba(251,191,36,.15);color:var(--amber)}
+  .tag.todo{background:rgba(139,151,173,.15);color:var(--mut)}
+  .phase .desc{color:var(--mut);font-size:13.5px;margin:2px 0 12px;}
+  .subs{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  @media(max-width:720px){.subs{grid-template-columns:1fr}}
+  .sb{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:13.5px;}
+  .sb b{color:var(--blue);font-weight:700;margin-right:5px;}
+
+  /* dev loop */
+  .loop{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+  @media(max-width:720px){.loop{grid-template-columns:1fr 1fr}}
+  .ls{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:13px;position:relative;}
+  .ls .n{display:inline-block;width:20px;height:20px;border-radius:6px;background:var(--purple);
+    color:#000;font-weight:700;font-size:11px;text-align:center;line-height:20px;margin-right:6px;}
+  .note{font-size:12.5px;color:var(--mut);margin-top:8px;}
+  code{background:#0c1119;border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:12.5px;color:var(--green);font-family:ui-monospace,Menlo,monospace;}
+  .foot{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;color:var(--mut);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1><span>₿</span> BTC Android App — <span style="color:var(--mut);font-weight:400">SDLC Roadmap</span></h1>
+  <div class="sub">Native client over the BTC AI Agent backend. Every phase = multiple sub-steps.</div>
+</header>
+
+<div class="here">
+  <b>You are here →</b> Requirements · Analysis · Design <b style="color:var(--green)">done &amp; approved.</b>
+  Next is <b>Development</b>, starting with <b>Phase 0 (Foundation)</b> — wire Hilt + build graph, no feature code yet.
+</div>
+
+<div class="rail">
+  <div class="step done"><div class="ph">Phase 1</div><div class="nm">Requirements</div><div class="st">✅ 5 sub-steps</div></div>
+  <div class="step done"><div class="ph">Phase 2</div><div class="nm">Analysis</div><div class="st">✅ 7 sub-steps</div></div>
+  <div class="step done"><div class="ph">Phase 3</div><div class="nm">Design</div><div class="st">✅ 10 sub-steps</div></div>
+  <div class="step next"><div class="ph">Phase 4</div><div class="nm">Development</div><div class="st">◀ NEXT</div></div>
+  <div class="step todo"><div class="ph">Phase 5</div><div class="nm">Testing</div><div class="st">continuous</div></div>
+  <div class="step todo"><div class="ph">Phase 6</div><div class="nm">Deployment</div><div class="st">later</div></div>
+  <div class="step todo"><div class="ph">Phase 7</div><div class="nm">Maintenance</div><div class="st">ongoing</div></div>
+</div>
+
+<!-- 1 -->
+<div class="phase">
+  <h2><span class="num">1</span> Requirements <span class="tag done">DONE</span></h2>
+  <div class="desc">What the app must do, derived from the existing bot.</div>
+  <div class="subs">
+    <div class="sb"><b>1a</b>Identify source of truth (btc-ai-agent)</div>
+    <div class="sb"><b>1b</b>Inventory bot features (16 dashboard pages)</div>
+    <div class="sb"><b>1c</b>Define goal — thin client, no backend rewrite</div>
+    <div class="sb"><b>1d</b>Feasibility verdict + bottlenecks</div>
+    <div class="sb"><b>1e</b>Deliverables: README.md + feasibility.html</div>
+  </div>
+</div>
+
+<!-- 2 -->
+<div class="phase">
+  <h2><span class="num">2</span> Analysis <span class="tag done">DONE</span></h2>
+  <div class="desc">Pin down the exact API contract the app codes against.</div>
+  <div class="subs">
+    <div class="sb"><b>2a</b>Map API surface (~50 endpoints + WS)</div>
+    <div class="sb"><b>2b</b>Auth model (Bearer token, 401/403/429, gate)</div>
+    <div class="sb"><b>2c</b>Request/response shapes per endpoint</div>
+    <div class="sb"><b>2d</b>Masked-secret rules (<code>****</code>)</div>
+    <div class="sb"><b>2e</b>WS price format <code>{price}</code></div>
+    <div class="sb"><b>2f</b>Backend gaps (FCM, mobile OAuth)</div>
+    <div class="sb"><b>2g</b>Non-functional needs (refresh, biometric)</div>
+  </div>
+</div>
+
+<!-- 3 -->
+<div class="phase">
+  <h2><span class="num">3</span> Design <span class="tag done">DONE · APPROVED</span></h2>
+  <div class="desc">How it's built — architecture + Hilt DI + screens.</div>
+  <div class="subs">
+    <div class="sb"><b>3a</b>Stack + DI (Hilt, rationale vs Koin)</div>
+    <div class="sb"><b>3b</b>Module/package layout (single-module)</div>
+    <div class="sb"><b>3c</b>Hilt DI graph (4 modules, scopes)</div>
+    <div class="sb"><b>3d</b>Auth interceptor + 401 authenticator</div>
+    <div class="sb"><b>3e</b>Repository layer (7 repos)</div>
+    <div class="sb"><b>3f</b>WS as lifecycle-scoped Flow</div>
+    <div class="sb"><b>3g</b>Screen designs (19 screens + nav)</div>
+    <div class="sb"><b>3h</b>UX rules (confirm/biometric/errors)</div>
+    <div class="sb"><b>3i</b>Test strategy</div>
+    <div class="sb"><b>3j</b>SDLC roadmap (this doc)</div>
+  </div>
+</div>
+
+<!-- 4 -->
+<div class="phase next">
+  <h2><span class="num">4</span> Development <span class="tag next">NEXT</span></h2>
+  <div class="desc">Two parts: one-time foundation, then a repeatable loop per screen.</div>
+
+  <div style="font-weight:700;color:var(--amber);margin:6px 0 6px;font-size:14px;">Phase 0 — Foundation (no TDD loop, just wiring that compiles)</div>
+  <div class="subs">
+    <div class="sb"><b>1</b>Build wiring: Java 11→17 + add Hilt/KSP/Retrofit/Firebase/Vico to catalog</div>
+    <div class="sb"><b>2</b>INTERNET permission + <code>@HiltAndroidApp</code> App + manifest</div>
+    <div class="sb"><b>3</b>Empty <code>di/ core/ data/ ui/</code> skeleton + 4 Hilt modules</div>
+    <div class="sb"><b>4</b><code>google-services.json</code> + verify <code>assembleDebug</code> green</div>
+  </div>
+  <div class="note">Exit criteria: app builds with the full DI graph + can mint a Firebase token.</div>
+
+  <div style="font-weight:700;color:var(--purple);margin:16px 0 6px;font-size:14px;">Per-screen loop — the 9 inner dev steps (repeated per screen)</div>
+  <div class="loop">
+    <div class="ls"><span class="n">1</span>Branch</div>
+    <div class="ls"><span class="n">2</span>Contract (DTO+API+repo sig)</div>
+    <div class="ls"><span class="n">3</span>Write failing tests (TDD)</div>
+    <div class="ls"><span class="n">4</span>Implement repo→VM→screen</div>
+    <div class="ls"><span class="n">5</span>Wire Hilt DI</div>
+    <div class="ls"><span class="n">6</span>Run tests → green</div>
+    <div class="ls"><span class="n">7</span>Manual verify on device</div>
+    <div class="ls"><span class="n">8</span>Code review</div>
+    <div class="ls"><span class="n">9</span>Commit + changelog</div>
+  </div>
+  <div class="note">Maps to agent pipeline <code>planner → test-writer → implementer → test-runner → code-review-coordinator → changelog</code>.<br>
+  Build order: Login → Gate → <b>Dashboard</b> (proves WS+auth) → read-only → control → admin.</div>
+</div>
+
+<!-- 5 -->
+<div class="phase">
+  <h2><span class="num">5</span> Testing <span class="tag todo">CONTINUOUS</span></h2>
+  <div class="desc">Runs alongside Development (TDD), not a tail phase.</div>
+  <div class="subs">
+    <div class="sb"><b>5a</b>Unit — ViewModel/repo fakes (Turbine)</div>
+    <div class="sb"><b>5b</b>Interceptor/Authenticator vs MockWebServer ★</div>
+    <div class="sb"><b>5c</b>Hilt instrumented (@TestInstallIn, @BindValue)</div>
+    <div class="sb"><b>5d</b>Compose UI tests</div>
+    <div class="sb"><b>5e</b>WS reconnect test</div>
+    <div class="sb"><b>5f</b>Manual device smoke (sign-in→price→refresh)</div>
+    <div class="sb"><b>5g</b>Regression before each merge</div>
+  </div>
+</div>
+
+<!-- 6 -->
+<div class="phase">
+  <h2><span class="num">6</span> Deployment <span class="tag todo">LATER</span></h2>
+  <div class="desc">Ship the app + the small backend additions it needs.</div>
+  <div class="subs">
+    <div class="sb"><b>6a</b>Ship backend adds (FCM endpoint, mobile OAuth)</div>
+    <div class="sb"><b>6b</b>App signing config + keystore</div>
+    <div class="sb"><b>6c</b>versionCode/Name bump</div>
+    <div class="sb"><b>6d</b>Signed release build (R8)</div>
+    <div class="sb"><b>6e</b>Internal/closed test track (Play Console)</div>
+    <div class="sb"><b>6f</b>Firebase prod config + SHA fingerprints</div>
+    <div class="sb"><b>6g</b>Staged rollout</div>
+    <div class="sb"><b>6h</b>Crash/ANR monitoring (Crashlytics)</div>
+  </div>
+</div>
+
+<!-- 7 -->
+<div class="phase">
+  <h2><span class="num">7</span> Maintenance <span class="tag todo">ONGOING</span></h2>
+  <div class="desc">Keep it healthy and in sync with the bot.</div>
+  <div class="subs">
+    <div class="sb"><b>7a</b>Monitor crashes / API errors</div>
+    <div class="sb"><b>7b</b>Handle backend API drift (ignoreUnknownKeys)</div>
+    <div class="sb"><b>7c</b>Mirror new bot features into app</div>
+    <div class="sb"><b>7d</b>Dependency / security updates</div>
+    <div class="sb"><b>7e</b>Capture lessons (tasks/lesson.md)</div>
+  </div>
+</div>
+
+<div class="foot">
+  Project: <code>AndroidStudioProjects/BTCAgent</code> · pkg <code>com.gshashank.btcagent</code> ·
+  Backend <code>btc.gshashank.com</code>.<br>
+  Full text: <code>SDLC.md</code> · Architecture: plan file · Feasibility: <code>README.md</code> / <code>feasibility.html</code>.
+</div>
+
+</div>
+</body>
+</html>
