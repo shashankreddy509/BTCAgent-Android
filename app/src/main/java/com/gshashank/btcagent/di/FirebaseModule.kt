@@ -1,17 +1,18 @@
 package com.gshashank.btcagent.di
 
+import android.content.Context
+import androidx.credentials.CredentialManager
 import com.google.firebase.auth.FirebaseAuth
+import com.gshashank.btcagent.R
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 /**
- * Firebase graph. Currently provides FirebaseAuth for Google sign-in token minting.
- *
- * NOTE: requires google-services.json in app/ at runtime. The google-services Gradle
- * plugin stays unapplied until the Login screen step, so this compiles today.
+ * Firebase + Credential Manager graph.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -20,4 +21,14 @@ object FirebaseModule {
     @Provides
     @Singleton
     fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+
+    @Provides
+    @Singleton
+    fun provideCredentialManager(@ApplicationContext context: Context): CredentialManager =
+        CredentialManager.create(context)
+
+    @Provides
+    @ServerClientId
+    fun provideServerClientId(@ApplicationContext context: Context): String =
+        context.getString(R.string.default_web_client_id)
 }

@@ -18,6 +18,16 @@ annotation class IoDispatcher
 @Qualifier
 annotation class DefaultDispatcher
 
+/** Marks the Main dispatcher (UI / ViewModel coroutines). */
+@Retention(AnnotationRetention.BINARY)
+@Qualifier
+annotation class MainDispatcher
+
+/** Marks the Google server client id string (OAuth web client id). */
+@Retention(AnnotationRetention.BINARY)
+@Qualifier
+annotation class ServerClientId
+
 /**
  * Provides coroutine dispatchers behind qualifiers so tests can swap in a TestDispatcher.
  */
@@ -32,4 +42,8 @@ object DispatcherModule {
     @Provides
     @DefaultDispatcher
     fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+
+    @Provides
+    @MainDispatcher
+    fun provideMainDispatcher(): CoroutineDispatcher = Dispatchers.Main.immediate
 }
