@@ -6,6 +6,8 @@ import com.gshashank.btcagent.data.repository.AccessRepository
 import com.gshashank.btcagent.data.repository.AccessRepositoryImpl
 import com.gshashank.btcagent.data.repository.AuthRepository
 import com.gshashank.btcagent.data.repository.AuthRepositoryImpl
+import com.gshashank.btcagent.data.repository.CatalogRepository
+import com.gshashank.btcagent.data.repository.CatalogRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -34,4 +36,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTokenProvider(impl: FirebaseTokenProvider): TokenProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindCatalogRepository(impl: CatalogRepositoryImpl): CatalogRepository
 }
