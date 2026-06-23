@@ -39,11 +39,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gshashank.btcagent.ui.theme.BtcAccent
 import com.gshashank.btcagent.ui.theme.BtcAccentDark
-import com.gshashank.btcagent.ui.theme.BtcBg2
-import com.gshashank.btcagent.ui.theme.BtcCardBorder
-import com.gshashank.btcagent.ui.theme.BtcText
-import com.gshashank.btcagent.ui.theme.BtcText2
-import com.gshashank.btcagent.ui.theme.BtcText3
 
 /**
  * Stateless content composable. Renders the Login screen UI.
@@ -106,7 +101,7 @@ fun LoginContent(
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = BtcText,
+                    color = MaterialTheme.colorScheme.onBackground,
                 ),
                 textAlign = TextAlign.Center,
             )
@@ -118,7 +113,7 @@ fun LoginContent(
                 text = "Your AI-powered Bitcoin trading assistant. Intelligent insights, real-time data.",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = 14.sp,
-                    color = BtcText2,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.56f),
                 ),
                 textAlign = TextAlign.Center,
                 modifier = Modifier
@@ -162,15 +157,15 @@ fun LoginContent(
                     .height(52.dp)
                     .border(
                         width = 1.dp,
-                        color = BtcCardBorder,
+                        color = MaterialTheme.colorScheme.outline,
                         shape = RoundedCornerShape(14.dp),
                     ),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = BtcBg2,
-                    contentColor = BtcText,
-                    disabledContainerColor = BtcBg2,
-                    disabledContentColor = BtcText2,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.56f),
                 ),
                 elevation = ButtonDefaults.buttonElevation(
                     defaultElevation = 0.dp,
@@ -187,12 +182,12 @@ fun LoginContent(
                             modifier = Modifier
                                 .size(22.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(Color.White.copy(alpha = 0.10f)),
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = "G",
-                                color = BtcText,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -202,7 +197,11 @@ fun LoginContent(
                         text = "Continue with Google",
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontSize = 14.sp,
-                            color = if (isLoading) BtcText2 else BtcText,
+                            color = if (isLoading) {
+                                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.56f)
+                            } else {
+                                MaterialTheme.colorScheme.onBackground
+                            },
                         ),
                     )
                 }
@@ -215,7 +214,7 @@ fun LoginContent(
                 text = "By continuing, you agree to our Terms of Service and Privacy Policy.",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 11.sp,
-                    color = BtcText3,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.40f),
                 ),
                 textAlign = TextAlign.Center,
                 modifier = Modifier

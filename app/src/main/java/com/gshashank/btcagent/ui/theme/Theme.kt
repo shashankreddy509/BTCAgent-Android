@@ -1,5 +1,6 @@
 package com.gshashank.btcagent.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -17,21 +18,21 @@ private val BitcoinDarkColorScheme = darkColorScheme(
     outline = BtcCardBorder,
 )
 
-// TODO: Replace with a proper light scheme when a light theme is designed.
 private val BitcoinLightColorScheme = lightColorScheme(
     primary = BtcAccent,
-    onPrimary = Color.Black,
-    background = BtcBg,
-    onBackground = BtcText,
-    surface = BtcCard,
-    onSurface = BtcText,
-    surfaceVariant = BtcBg2,
-    outline = BtcCardBorder,
+    onPrimary = Color.White,
+    background = BtcLightBg,
+    onBackground = BtcLightText,
+    surface = BtcLightCard,
+    onSurface = BtcLightText,
+    surfaceVariant = BtcLightBg2,
+    outline = BtcLightCardBorder,
 )
 
 @Composable
 fun BTCAgentTheme(
-    darkTheme: Boolean = true,
+    // Default follows the system setting; design is dark-first but both schemes are real.
+    darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
