@@ -3,6 +3,7 @@ package com.gshashank.btcagent.di
 import com.gshashank.btcagent.BuildConfig
 import com.gshashank.btcagent.data.network.AccessApi
 import com.gshashank.btcagent.data.network.AuthInterceptor
+import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import dagger.Module
 import dagger.Provides
@@ -70,4 +71,9 @@ object NetworkModule {
     @Singleton
     fun provideAccessApi(retrofit: Retrofit): AccessApi =
         retrofit.create(AccessApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideCatalogApi(retrofit: Retrofit): CatalogApi =
+        retrofit.create(CatalogApi::class.java)
 }
