@@ -2,6 +2,7 @@ package com.gshashank.btcagent.data.repository
 
 import android.app.Activity
 import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.gms.tasks.Task
@@ -21,7 +22,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 @Singleton
-class AuthRepositoryImpl @Inject constructor(
+open class AuthRepositoryImpl @Inject constructor(
     private val auth: FirebaseAuth,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     private val credentialManager: CredentialManager,
@@ -50,17 +51,7 @@ class AuthRepositoryImpl @Inject constructor(
                     request = request,
                 )
 
-                // The OS credential provider can return another credential type even when
-                // only a Google ID option is requested — guard instead of an unchecked cast.
-                val credential = response.credential
-                if (credential !is GoogleIdTokenCredential) {
-                    return@withContext Result.failure(
-                        IllegalStateException(
-                            "Unexpected credential type: ${credential::class.simpleName}"
-                        )
-                    )
-                }
-                val idToken = credential.idToken
+                val idToken = extractGoogleIdToken(response.credential)
                 val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
 
                 val authResult = auth.signInWithCredential(firebaseCredential).awaitTask()
@@ -75,6 +66,21 @@ class AuthRepositoryImpl @Inject constructor(
                 Result.failure(e)
             }
         }
+
+    /**
+     * Extracts the Google ID token from a Credential Manager response. The token arrives
+     * wrapped in a [CustomCredential] of type [GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL];
+     * verify the type, then unwrap via [GoogleIdTokenCredential.createFrom] — never an unchecked cast.
+     *
+     * Open so JVM unit tests can supply the token without building an Android [android.os.Bundle].
+     */
+    protected open fun extractGoogleIdToken(credential: androidx.credentials.Credential): String {
+        check(
+            credential is CustomCredential &&
+                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+        ) { "Unexpected credential type: ${credential::class.simpleName}" }
+        return GoogleIdTokenCredential.createFrom(credential.data).idToken
+    }
 
     override suspend fun getIdToken(): Result<String> =
         withContext(ioDispatcher) {

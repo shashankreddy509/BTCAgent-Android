@@ -45,12 +45,31 @@ class AuthRepositoryImplTest {
     private val mockActivity: Activity = mock()
     private val mockUser: FirebaseUser = mock()
 
+    /** Stub idToken returned by the overridden extractor, so tests need no Android Bundle. */
+    private val extractedIdToken = "fake.google.id.token"
+
+    /**
+     * Test subclass overriding [AuthRepositoryImpl.extractGoogleIdToken] — the real impl unwraps a
+     * Credential Manager [androidx.credentials.CustomCredential] via [GoogleIdTokenCredential.createFrom],
+     * which needs an Android Bundle unavailable in pure JVM tests. The override returns a fixed token
+     * so the Firebase sign-in path can be exercised without Robolectric.
+     */
+    private class TestAuthRepositoryImpl(
+        auth: FirebaseAuth,
+        ioDispatcher: kotlinx.coroutines.CoroutineDispatcher,
+        credentialManager: CredentialManager,
+        private val token: String,
+    ) : AuthRepositoryImpl(auth, ioDispatcher, credentialManager) {
+        override fun extractGoogleIdToken(credential: androidx.credentials.Credential): String = token
+    }
+
     @Before
     fun setUp() {
-        repository = AuthRepositoryImpl(
+        repository = TestAuthRepositoryImpl(
             auth = mockAuth,
             ioDispatcher = testDispatcher,
             credentialManager = mockCredentialManager,
+            token = extractedIdToken,
         )
     }
 
