@@ -82,16 +82,16 @@ open class AuthRepositoryImpl @Inject constructor(
         return GoogleIdTokenCredential.createFrom(credential.data).idToken
     }
 
-    override suspend fun getIdToken(): Result<String> =
+    override suspend fun getIdToken(forceRefresh: Boolean): Result<String> =
         withContext(ioDispatcher) {
             try {
                 val user = auth.currentUser
                     ?: return@withContext Result.failure(
                         IllegalStateException("No signed-in user")
                     )
-                // forceRefresh=true: avoid forwarding a near-expired cached token the
-                // backend would reject. Firebase throttles refreshes internally.
-                val tokenResult = user.getIdToken(true).awaitTask()
+                // forceRefresh=false uses the cached token (per-request, cheap);
+                // true forces a network refresh (401 retry path). Firebase throttles refreshes.
+                val tokenResult = user.getIdToken(forceRefresh).awaitTask()
                 val token = tokenResult.token
                     ?: return@withContext Result.failure(
                         IllegalStateException("ID token is null")

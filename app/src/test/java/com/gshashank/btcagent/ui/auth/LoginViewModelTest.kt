@@ -193,7 +193,7 @@ private class FakeAuthRepository : AuthRepository {
 
     override suspend fun signInWithGoogle(activity: Activity): Result<FirebaseUser> = signInResult
 
-    override suspend fun getIdToken(): Result<String> =
+    override suspend fun getIdToken(forceRefresh: Boolean): Result<String> =
         Result.failure(UnsupportedOperationException("not needed in ViewModel tests"))
 
     override fun signOut() {

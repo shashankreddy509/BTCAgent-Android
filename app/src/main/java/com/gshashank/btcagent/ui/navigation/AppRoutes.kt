@@ -9,5 +9,8 @@ sealed interface Route {
     data object Login : Route
 
     @Serializable
+    data object Gate : Route
+
+    @Serializable
     data object Home : Route
 }
