@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.gshashank.btcagent.ui.auth.LoginScreen
+import com.gshashank.btcagent.ui.gate.GateScreen
 import com.gshashank.btcagent.ui.navigation.Route
 import com.gshashank.btcagent.ui.theme.BTCAgentTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -54,8 +55,24 @@ private fun AppNavHost() {
             LoginScreen(
                 viewModel = hiltViewModel(),
                 onAuthenticated = {
-                    navController.navigate(Route.Home) {
+                    navController.navigate(Route.Gate) {
                         popUpTo(Route.Login) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable<Route.Gate> {
+            GateScreen(
+                viewModel = hiltViewModel(),
+                onAllowed = {
+                    navController.navigate(Route.Home) {
+                        popUpTo(Route.Gate) { inclusive = true }
+                    }
+                },
+                onSignedOut = {
+                    navController.navigate(Route.Login) {
+                        popUpTo(0) { inclusive = true }
                     }
                 },
             )
