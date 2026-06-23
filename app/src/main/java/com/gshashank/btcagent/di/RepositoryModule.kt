@@ -1,15 +1,21 @@
 package com.gshashank.btcagent.di
 
+import com.gshashank.btcagent.data.repository.AuthRepository
+import com.gshashank.btcagent.data.repository.AuthRepositoryImpl
+import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
 /**
  * Binds repository interfaces to implementations.
- *
- * Empty for Phase 0 — @Binds entries are added per screen as repos land
- * (Auth, Access, Trading, Settings, MarketData, Price, Device — design 3e).
  */
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class RepositoryModule
+abstract class RepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
+}

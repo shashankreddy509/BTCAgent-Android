@@ -4,10 +4,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
-    // NOTE: google-services plugin intentionally NOT applied yet.
-    // It hard-fails the build if google-services.json is missing.
-    // Apply it at the Login screen step once the JSON is dropped into app/.
-    // alias(libs.plugins.google.services)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -44,6 +41,15 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests {
+            // Android SDK stubs throw RuntimeException by default. Setting this to true makes
+            // un-mocked methods return default values instead, which is necessary for
+            // AuthRepositoryImplTest: GetGoogleIdOption.Builder uses Bundle.putString internally
+            // and GoogleAuthProvider.getCredential constructs objects that touch Android APIs.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 kotlin {
@@ -58,8 +64,10 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.ui.text.google.fonts)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     // Coroutines
@@ -80,9 +88,14 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.kotlinx.serialization.json)
 
-    // Firebase (auth used at Login step; google-services plugin applied then)
+    // Firebase (google-services plugin applied above)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+
+    // Credential Manager + Google Identity
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // Charts
     implementation(libs.vico.compose.m3)
@@ -92,6 +105,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.mockito.kotlin)
 
     // Instrumented test
     androidTestImplementation(platform(libs.androidx.compose.bom))
