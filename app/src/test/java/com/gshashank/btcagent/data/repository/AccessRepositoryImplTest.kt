@@ -4,6 +4,8 @@ import com.gshashank.btcagent.data.network.AccessApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -14,6 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Retrofit
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 /**
  * JVM unit tests for [AccessRepositoryImpl].
@@ -24,12 +27,15 @@ import retrofit2.Retrofit
  *
  * All tests are expected to FAIL until [AccessRepositoryImpl] is implemented.
  *
+ * The endpoint returns 200 + {allowed, admin}; the verdict is the BODY, not the status.
+ *
  * Test coverage:
- *   1. HTTP 200 → AccessResult.Allowed
- *   2. HTTP 403 → AccessResult.Pending
+ *   1. 200 allowed=true  → AccessResult.Allowed(admin)
+ *   2. 200 allowed=false → AccessResult.Pending
  *   3. HTTP 401 → AccessResult.Unauthorized
  *   4. HTTP 500 → AccessResult.Error
  *   5. IOException (server shut down before call) → AccessResult.Error with non-null cause
+ *   6. 200 with unparsable body → AccessResult.Error (never fail open)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AccessRepositoryImplTest {
@@ -46,9 +52,11 @@ class AccessRepositoryImplTest {
 
         // Build a real Retrofit + OkHttp stack pointed at MockWebServer.
         // No auth interceptors needed — we are testing only the repository mapping.
+        val json = Json { ignoreUnknownKeys = true }
         val retrofit = Retrofit.Builder()
             .baseUrl(mockWebServer.url("/"))
             .client(OkHttpClient())
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
 
         accessApi = retrofit.create(AccessApi::class.java)
@@ -64,34 +72,44 @@ class AccessRepositoryImplTest {
     }
 
     // -------------------------------------------------------------------------
-    // 1. HTTP 200 → Allowed
+    // 1. 200 allowed=true → Allowed(admin)
     // -------------------------------------------------------------------------
 
     @Test
-    fun `200 response maps to AccessResult Allowed`() = runTest(testDispatcher) {
-        mockWebServer.enqueue(MockResponse().setResponseCode(200))
+    fun `200 allowed true maps to AccessResult Allowed with admin`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"allowed":true,"admin":true}"""),
+        )
 
         val result = repository.checkAccess()
 
         assertEquals(
-            "HTTP 200 must map to AccessResult.Allowed",
-            AccessResult.Allowed,
+            "allowed=true must map to AccessResult.Allowed(admin=true)",
+            AccessResult.Allowed(admin = true),
             result,
         )
     }
 
     // -------------------------------------------------------------------------
-    // 2. HTTP 403 → Pending
+    // 2. 200 allowed=false → Pending (the non-approved user — the original bug)
     // -------------------------------------------------------------------------
 
     @Test
-    fun `403 response maps to AccessResult Pending`() = runTest(testDispatcher) {
-        mockWebServer.enqueue(MockResponse().setResponseCode(403))
+    fun `200 allowed false maps to AccessResult Pending`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"allowed":false,"admin":false}"""),
+        )
 
         val result = repository.checkAccess()
 
         assertEquals(
-            "HTTP 403 must map to AccessResult.Pending",
+            "allowed=false must map to AccessResult.Pending (never Allowed)",
             AccessResult.Pending,
             result,
         )
@@ -148,6 +166,27 @@ class AccessRepositoryImplTest {
         assertNotNull(
             "AccessResult.Error.cause must be non-null when an IOException occurs",
             (result as AccessResult.Error).cause,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. 200 with unparsable body → Error (must never silently fail open)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `200 with unparsable body maps to AccessResult Error`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("not json"),
+        )
+
+        val result = repository.checkAccess()
+
+        assertTrue(
+            "A 200 with an unparsable body must map to Error, never Allowed; got $result",
+            result is AccessResult.Error,
         )
     }
 }

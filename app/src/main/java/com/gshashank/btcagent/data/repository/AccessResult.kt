@@ -1,12 +1,15 @@
 package com.gshashank.btcagent.data.repository
 
 /**
- * Sealed result type returned by [AccessRepository.checkAccess].
- * Variants mirror the HTTP codes from the allow-list endpoint:
- *   200 → Allowed, 403 → Pending, 401 → Unauthorized, everything else → Error.
+ * Sealed result returned by [AccessRepository.checkAccess].
+ *
+ * The endpoint returns 200 + `{allowed, admin}` for any authenticated user, so the
+ * verdict comes from the body, not the status code:
+ *   200 allowed=true  → Allowed(admin), 200 allowed=false → Pending,
+ *   401 → Unauthorized, everything else / exception → Error.
  */
 sealed interface AccessResult {
-    data object Allowed : AccessResult
+    data class Allowed(val admin: Boolean) : AccessResult
     data object Pending : AccessResult
     data object Unauthorized : AccessResult
     data class Error(val cause: Throwable?) : AccessResult

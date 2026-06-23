@@ -13,3 +13,6 @@ local.properties
 # Secrets — never commit
 google-services.json
 app/google-services.json
+
+# Claude Code session state
+.claude/

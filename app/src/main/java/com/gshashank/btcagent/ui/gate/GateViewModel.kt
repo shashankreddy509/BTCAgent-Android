@@ -66,7 +66,7 @@ class GateViewModel @Inject constructor(
             delay(1L)
             val result = accessRepository.checkAccess()
             _uiState.value = when (result) {
-                AccessResult.Allowed -> GateUiState.Allowed
+                is AccessResult.Allowed -> GateUiState.Allowed
                 AccessResult.Pending -> GateUiState.Pending(
                     email = authRepository.currentUser?.email ?: ""
                 )

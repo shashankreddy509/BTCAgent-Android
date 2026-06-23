@@ -66,7 +66,7 @@ class GateViewModelTest {
 
     @Test
     fun `init emits Loading then Allowed`() = runTest(testDispatcher) {
-        fakeAccess.checkAccessResult = AccessResult.Allowed
+        fakeAccess.checkAccessResult = AccessResult.Allowed(admin = false)
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
@@ -149,7 +149,7 @@ class GateViewModelTest {
             assertEquals(GateUiState.Error, awaitItem())
 
             // Change the repository result before triggering the retry.
-            fakeAccess.checkAccessResult = AccessResult.Allowed
+            fakeAccess.checkAccessResult = AccessResult.Allowed(admin = false)
 
             viewModel.onRetry()
 
@@ -175,7 +175,7 @@ class GateViewModelTest {
 
     @Test
     fun `onSignOut calls authRepository signOut and emits Unauthorized`() = runTest(testDispatcher) {
-        fakeAccess.checkAccessResult = AccessResult.Allowed
+        fakeAccess.checkAccessResult = AccessResult.Allowed(admin = false)
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
