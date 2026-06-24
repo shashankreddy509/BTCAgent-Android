@@ -2,20 +2,25 @@ package com.gshashank.btcagent.ui.home
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 
+/**
+ * Home tab root — mounts [DashboardScreen] unconditionally.
+ *
+ * No catalog flag (Decision 1 in PLAN.md — MOBILE-5): the Dashboard is the foundational
+ * Screen 04 proving the WS + auth pipe; there is no prior production audience to roll back to.
+ *
+ * The outer [Box] keeps the [testTag("screen_home")] contract that [AppShellTest] depends on.
+ */
 @Composable
 fun HomeTabScreen() {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .testTag("screen_home"),
-        contentAlignment = Alignment.Center,
     ) {
-        Text("Home — coming soon")
+        DashboardScreen()
     }
 }

@@ -8,6 +8,8 @@ import com.gshashank.btcagent.data.repository.AuthRepository
 import com.gshashank.btcagent.data.repository.AuthRepositoryImpl
 import com.gshashank.btcagent.data.repository.CatalogRepository
 import com.gshashank.btcagent.data.repository.CatalogRepositoryImpl
+import com.gshashank.btcagent.data.repository.DashboardRepository
+import com.gshashank.btcagent.data.repository.DashboardRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -40,4 +42,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCatalogRepository(impl: CatalogRepositoryImpl): CatalogRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDashboardRepository(impl: DashboardRepositoryImpl): DashboardRepository
 }

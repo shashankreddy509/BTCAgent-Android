@@ -4,11 +4,14 @@ import com.gshashank.btcagent.BuildConfig
 import com.gshashank.btcagent.data.network.AccessApi
 import com.gshashank.btcagent.data.network.AuthInterceptor
 import com.gshashank.btcagent.data.network.CatalogApi
+import com.gshashank.btcagent.data.network.DashboardApi
+import com.gshashank.btcagent.data.network.PriceWebSocketClient
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -109,4 +112,26 @@ object NetworkModule {
     @Singleton
     fun provideCatalogApi(@Named("public") retrofit: Retrofit): CatalogApi =
         retrofit.create(CatalogApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideDashboardApi(retrofit: Retrofit): DashboardApi =
+        retrofit.create(DashboardApi::class.java)
+
+    /**
+     * Provides [PriceWebSocketClient] with the production WS URL.
+     * The [wsUrl] parameter has a default in [PriceWebSocketClient] but Hilt cannot inject
+     * default parameters, so we provide it explicitly via this @Provides method.
+     */
+    @Provides
+    @Singleton
+    fun providePriceWebSocketClient(
+        okHttpClient: OkHttpClient,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): PriceWebSocketClient =
+        PriceWebSocketClient(
+            okHttpClient = okHttpClient,
+            ioDispatcher = ioDispatcher,
+            wsUrl = BuildConfig.WS_URL,
+        )
 }
