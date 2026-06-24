@@ -15,6 +15,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -56,9 +57,40 @@ object NetworkModule {
             .build()
     }
 
+    /**
+     * Unauthenticated client for PUBLIC endpoints (e.g. /api/catalogs). Deliberately omits
+     * [AuthInterceptor] + [TokenAuthenticator] so the user's Firebase ID token is never attached
+     * to a public request that ignores it. Still redacts Authorization in logs as defence in depth.
+     */
     @Provides
     @Singleton
-    fun provideRetrofit(client: OkHttpClient, json: Json): Retrofit {
+    @Named("public")
+    fun providePublicOkHttpClient(): OkHttpClient {
+        val logging = HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) {
+                HttpLoggingInterceptor.Level.BODY
+            } else {
+                HttpLoggingInterceptor.Level.NONE
+            }
+            redactHeader("Authorization")
+        }
+        return OkHttpClient.Builder()
+            .addInterceptor(logging)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRetrofit(client: OkHttpClient, json: Json): Retrofit =
+        buildRetrofit(client, json)
+
+    @Provides
+    @Singleton
+    @Named("public")
+    fun providePublicRetrofit(@Named("public") client: OkHttpClient, json: Json): Retrofit =
+        buildRetrofit(client, json)
+
+    private fun buildRetrofit(client: OkHttpClient, json: Json): Retrofit {
         val contentType = "application/json".toMediaType()
         return Retrofit.Builder()
             .baseUrl(BuildConfig.BASE_URL)
@@ -72,8 +104,9 @@ object NetworkModule {
     fun provideAccessApi(retrofit: Retrofit): AccessApi =
         retrofit.create(AccessApi::class.java)
 
+    // CatalogApi uses the PUBLIC (unauthenticated) Retrofit — /api/catalogs needs no token.
     @Provides
     @Singleton
-    fun provideCatalogApi(retrofit: Retrofit): CatalogApi =
+    fun provideCatalogApi(@Named("public") retrofit: Retrofit): CatalogApi =
         retrofit.create(CatalogApi::class.java)
 }

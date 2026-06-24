@@ -1,52 +1,30 @@
 package com.gshashank.btcagent.data.repository
 
 /**
- * Contract for the runtime feature-flag registry ("catalog").
+ * Provides access to runtime catalog feature flags.
  *
- * The implementation fetches a flat `{ "flag_name": bool }` JSON map from the backend and caches
- * it in-memory. Callers read flags synchronously via [catalogOn].
- *
- * Invariant for all flags:
- *   - A flag present and true  → ON
- *   - A flag present and false → OFF
- *   - A flag absent from the map → OFF (false) — returned by [catalogOn(flag)]
- *
- * Exception — Option A gate-flag inversion (MOBILE-27):
- *   `gate_access_check_body` is treated as ON when MISSING at the [AccessRepositoryImpl] call
- *   site. That inversion is achieved by calling [catalogOn(flag, default)] with `default = true`.
- *   The two-arg overload returns the provided [default] when the key is absent, rather than
- *   the catalog-global default of `false`.
- *   See PLAN.md §Risks/Option-A for the full security rationale.
+ * Flag keys are numeric platform+id integers (android = 1xxxxx, ios = 2xxxxx).
+ * Flags are fetched from the versioned platform API and persisted in DataStore
+ * for last-known-good behavior across restarts.
  */
 interface CatalogRepository {
-
-    /**
-     * Fetches the flag map from the server and replaces the in-memory cache.
-     *
-     * Contract: NEVER throws to callers. On any error (network, HTTP, parse), the last-known map
-     * is preserved. If no successful fetch has occurred yet, the cache remains empty and all
-     * [catalogOn] calls return false.
-     */
+    /** Fetches the latest catalog from the server. NEVER throws; fail-open. */
     suspend fun refresh()
 
     /**
-     * Returns the current value of [flag] from the in-memory cache.
-     *
-     * This is a synchronous, non-blocking read. Returns `false` if [flag] is absent or if no
-     * successful refresh has occurred yet.
+     * Returns the stored value for [id], or `false` if the id is absent or
+     * no successful fetch has occurred yet.
      */
-    fun catalogOn(flag: String): Boolean
+    fun isEnabled(id: Int): Boolean
 
     /**
-     * Returns the current value of [flag] from the in-memory cache, using [default] when the
-     * key is entirely ABSENT (distinct from a flag present-and-false).
+     * Returns the stored value when [id] is explicitly present in the catalog
+     * (even if the stored value is `false`). Returns [default] only when the
+     * key is entirely absent from the fetched catalog.
      *
-     * Abstract on purpose: a delegating default body would silently drop [default] (return false
-     * for absent keys), which would break the security-sensitive Option-A path. Every
-     * implementation MUST distinguish "explicitly false" from "absent" (e.g. `getOrDefault`).
-     *
-     * Option-A usage: security-sensitive callers pass `default = true` so a missing key falls
-     * back to the SAFE path rather than the legacy path. See [AccessRepositoryImpl].
+     * Option-A inversion for security-sensitive flags: pass `default = true` so
+     * that a missing/failed fetch falls back to the SAFE path rather than OFF.
+     * An explicit `false` from the server correctly overrides the default.
      */
-    fun catalogOn(flag: String, default: Boolean): Boolean
+    fun isEnabled(id: Int, default: Boolean): Boolean
 }

@@ -31,7 +31,7 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
  * Three new tests cover the flag-OFF and flag-MISSING (Option-A) paths.
  *
  * OPTION-A CONTRACT (encoded in test 9):
- *   When the flag `gate_access_check_body` is MISSING from the catalog map, [AccessRepositoryImpl]
+ *   When the flag `user_access_status` is MISSING from the catalog map, [AccessRepositoryImpl]
  *   MUST treat it as ON — using the SAFE/body-based path, NOT the old status-based path.
  *   A 200 with `allowed=false` must map to [AccessResult.Pending], not [AccessResult.Allowed].
  *   The [FakeCatalogRepository] for this case uses the MISSING sentinel (null map entry) to
@@ -299,7 +299,7 @@ class AccessRepositoryImplTest {
     // =========================================================================
     // FLAG MISSING — Option-A safe default (body-based, NOT old status-based)
     //
-    // This is the key MOBILE-27 Option-A contract test. When gate_access_check_body
+    // This is the key MOBILE-27 Option-A contract test. When user_access_status
     // is absent from the catalog map entirely (FakeCatalogRepository.flagMissing = true),
     // AccessRepositoryImpl MUST use the body-based path (safe default), NOT the old
     // status-based path.
@@ -358,21 +358,21 @@ class AccessRepositoryImplTest {
 //   FakeCatalogRepository(flagOn = false)   → always returns false (flag OFF, present=false)
 //   FakeCatalogRepository(flagMissing=true) → simulates a catalog where the key is absent.
 //     Under Option A, AccessRepositoryImpl must NOT route this through the old status-based path.
-//     The fake itself returns false (same as the real catalogOn() for absent keys) — the
+//     The fake itself returns false (same as the real isEnabled() for absent keys) — the
 //     difference is the IMPL must call a separate helper / use getOrDefault with true sentinel,
-//     not naively call catalogOn() and treat false as OFF.
+//     not naively call isEnabled() and treat false as OFF.
 //
 // NOTE: The flagMissing mode intentionally exposes the same external value (false) as flagOn=false
 // from the fake's perspective. The test exercises that AccessRepositoryImpl distinguishes between
 // "flag explicitly set to false" and "flag absent" internally — which requires the Option-A
-// inversion at the call site in AccessRepositoryImpl (e.g. using a different API than catalogOn).
+// inversion at the call site in AccessRepositoryImpl (e.g. using a different API than isEnabled).
 // =============================================================================
 private class FakeCatalogRepository(
     /** When true, the flag is present and ON. When false, present and explicitly OFF. */
     private val flagOn: Boolean = false,
     /**
      * When true, simulates a completely empty catalog (the key is ABSENT).
-     * The 1-arg [catalogOn] returns false (interface contract for missing keys), but the
+     * The 1-arg [isEnabled] returns false (interface contract for missing keys), but the
      * 2-arg overload returns the caller's [default] — exactly like the real getOrDefault.
      * AccessRepositoryImpl relies on the 2-arg default=true (Option A) so a missing flag
      * routes to the SAFE body-based path, never the old status-based one.
@@ -388,9 +388,9 @@ private class FakeCatalogRepository(
 
     override suspend fun refresh() = Unit
 
-    override fun catalogOn(flag: String): Boolean =
+    override fun isEnabled(id: Int): Boolean =
         if (flagMissing) false else flagOn
 
-    override fun catalogOn(flag: String, default: Boolean): Boolean =
+    override fun isEnabled(id: Int, default: Boolean): Boolean =
         if (flagMissing) default else flagOn
 }

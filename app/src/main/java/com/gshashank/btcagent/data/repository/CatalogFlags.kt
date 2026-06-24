@@ -1,13 +1,23 @@
 package com.gshashank.btcagent.data.repository
 
 /**
- * Catalog (feature-flag) names. One const per flag so call sites can't typo a name —
- * a mistyped literal silently reads the wrong/absent flag.
+ * Runtime catalog feature-flag identifiers.
+ * Numeric ids: android = 1xxxxx (platform 1), ios = 2xxxxx (platform 2).
  */
 object CatalogFlags {
     /**
-     * Gates the access-check verdict path. ON/missing → body-based mapping (safe);
-     * explicit false → legacy status-based mapping (rollback). See [AccessRepositoryImpl].
+     * login_mock — android id 100001, ios id 200001.
+     * Verified live at catalog version 1: ON.
+     * Use: `catalogRepository.isEnabled(LOGIN_MOCK)`.
      */
-    const val GATE_ACCESS_CHECK_BODY = "gate_access_check_body"
+    const val LOGIN_MOCK = 100001
+
+    /**
+     * user_access_status (backend Firestore key: gate_access_check_body) — android id 100002,
+     * ios id 200002. Allocated via BTCWEB-16 (Done), verified live at catalog version 4: ON.
+     * Gates the access-check verdict mapping (MOBILE-27, Option-A). Security-sensitive:
+     * read with `isEnabled(USER_ACCESS_STATUS, default = true)` so a missing key falls back to
+     * the SAFE body-based path. An explicit server-side `false` triggers the legacy rollback path.
+     */
+    const val USER_ACCESS_STATUS = 100002
 }

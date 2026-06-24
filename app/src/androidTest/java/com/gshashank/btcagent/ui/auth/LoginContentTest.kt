@@ -191,4 +191,153 @@ class LoginContentTest {
             .onNodeWithTag("legal_text")
             .assertHasNoClickAction()
     }
+
+    // =========================================================================
+    // Catalog flag-gating contract (MOBILE-28)
+    //
+    // LoginContent takes `isMockLayout: Boolean` as a plain param. Both branches
+    // are driven directly — no CatalogRepository, no Hilt, no fake needed here.
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 7. Flag OFF: old subtitle copy shown; new subtitle copy absent
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun flag_off_idle_shows_old_subtitle_copy() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                LoginContent(
+                    uiState = LoginUiState.Idle,
+                    isMockLayout = false,
+                    onGoogleSignIn = {},
+                )
+            }
+        }
+
+        // Old subtitle must be present when flag is OFF.
+        composeTestRule
+            .onNodeWithText("Your AI-powered Bitcoin", substring = true)
+            .assertIsDisplayed()
+
+        // New subtitle must NOT be present when flag is OFF.
+        composeTestRule
+            .onNodeWithText("Monitor and control", substring = true)
+            .assertDoesNotExist()
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. Flag ON: new subtitle copy shown; old subtitle copy absent
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun flag_on_idle_shows_new_subtitle_copy() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                LoginContent(
+                    uiState = LoginUiState.Idle,
+                    isMockLayout = true,
+                    onGoogleSignIn = {},
+                )
+            }
+        }
+
+        // New subtitle must be present when flag is ON.
+        composeTestRule
+            .onNodeWithText("Monitor and control your server-side trading bot", substring = true)
+            .assertIsDisplayed()
+
+        // Old subtitle must NOT be present when flag is ON.
+        composeTestRule
+            .onNodeWithText("Your AI-powered Bitcoin", substring = true)
+            .assertDoesNotExist()
+    }
+
+    // -------------------------------------------------------------------------
+    // 9. Flag OFF: old footer copy shown
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun flag_off_idle_shows_old_footer_copy() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                LoginContent(
+                    uiState = LoginUiState.Idle,
+                    isMockLayout = false,
+                    onGoogleSignIn = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Terms of Service and Privacy Policy", substring = true)
+            .assertIsDisplayed()
+    }
+
+    // -------------------------------------------------------------------------
+    // 10. Flag ON: new footer copy shown
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun flag_on_idle_shows_new_footer_copy() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                LoginContent(
+                    uiState = LoginUiState.Idle,
+                    isMockLayout = true,
+                    onGoogleSignIn = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Terms & Risk Disclosure", substring = true)
+            .assertIsDisplayed()
+    }
+
+    // -------------------------------------------------------------------------
+    // 11. Flag ON + Idle: button present and enabled
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun flag_on_idle_button_present_and_enabled() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                LoginContent(
+                    uiState = LoginUiState.Idle,
+                    isMockLayout = true,
+                    onGoogleSignIn = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Continue with Google")
+            .assertIsEnabled()
+    }
+
+    // -------------------------------------------------------------------------
+    // 12. Flag ON + Loading: button disabled and spinner visible
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun flag_on_loading_disables_button_and_shows_spinner() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                LoginContent(
+                    uiState = LoginUiState.Loading,
+                    isMockLayout = true,
+                    onGoogleSignIn = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText("Continue with Google")
+            .assertIsNotEnabled()
+
+        composeTestRule
+            .onNodeWithTag("sign_in_loading_indicator")
+            .assertIsDisplayed()
+    }
 }

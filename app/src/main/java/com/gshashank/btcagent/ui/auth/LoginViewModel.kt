@@ -3,6 +3,8 @@ package com.gshashank.btcagent.ui.auth
 import android.app.Activity
 import androidx.lifecycle.ViewModel
 import com.gshashank.btcagent.data.repository.AuthRepository
+import com.gshashank.btcagent.data.repository.CatalogFlags
+import com.gshashank.btcagent.data.repository.CatalogRepository
 import com.gshashank.btcagent.data.repository.UserCancelledException
 import com.gshashank.btcagent.di.MainDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +23,7 @@ import javax.inject.Inject
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val repository: AuthRepository,
+    private val catalogRepository: CatalogRepository,
     @MainDispatcher mainDispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
 ) : ViewModel() {
 
@@ -29,6 +32,9 @@ class LoginViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
+
+    /** True when the catalog flag [CatalogFlags.LOGIN_MOCK] is ON. */
+    val isMockLayout: Boolean = catalogRepository.isEnabled(CatalogFlags.LOGIN_MOCK)
 
     fun onGoogleSignIn(activity: Activity) {
         scope.launch {

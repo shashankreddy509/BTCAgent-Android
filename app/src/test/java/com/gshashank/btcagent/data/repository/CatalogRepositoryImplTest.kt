@@ -1,7 +1,13 @@
 package com.gshashank.btcagent.data.repository
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.gshashank.btcagent.data.network.CatalogApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -18,43 +24,58 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.io.File
+import java.util.UUID
 
 /**
- * JVM unit tests for [CatalogRepositoryImpl] — MOBILE-26.
+ * JVM unit tests for [CatalogRepositoryImpl] — MOBILE-29.
  *
- * Uses [MockWebServer] as the in-process HTTP server (same pattern as [AccessRepositoryImplTest]).
- * Uses [StandardTestDispatcher] so the `init {}` polling loop in [CatalogRepositoryImpl] does NOT
- * fire eagerly on construction. Tests call [CatalogRepositoryImpl.refresh] manually and drive
- * virtual time with [advanceUntilIdle] — this sidesteps the UnconfinedTestDispatcher caveat
- * described in PLAN.md §Risks.
+ * Rewrites the MOBILE-26 tests to match the versioned platform+id API:
+ *   GET /api/catalogs?platform=<P>&version=<V>
  *
- * Construction strategy: each test constructs a fresh [CatalogRepositoryImpl] with the test
- * dispatcher. Because [StandardTestDispatcher] does not run coroutines until explicitly advanced,
- * the `init {}` loop does not execute spontaneously — tests call `refresh()` directly inside
- * `runTest` instead of relying on the background loop.
+ * Responses are either:
+ *   {"changed":false,"version":N}                       — no-op
+ *   {"changed":true,"version":N,"catalogs":{"id":bool}} — full snapshot replacement
  *
- * All tests are expected to FAIL until [CatalogRepositoryImpl] is implemented (MOBILE-26).
+ * Flag identifiers are numeric Ints (android = 1xxxxx).
  *
- * Test coverage:
- *   1. refresh() with `{"a":true,"b":false}` → catalogOn("a")==true, catalogOn("b")==false
- *   2. catalogOn("missing") == false after refresh of map not containing that key
- *   3. Fail-open: second refresh errors → last-known map preserved, no exception propagated
- *   4. Initial state (no refresh called) → all catalogOn == false (emptyMap default)
- *   5. HTTP 500 response on second refresh → last-known map preserved
+ * Setup pattern:
+ *   - [MockWebServer] for HTTP — same as the MOBILE-26 suite.
+ *   - [StandardTestDispatcher] — the init{} poll loop does NOT fire eagerly; tests call
+ *     [CatalogRepositoryImpl.refresh] manually.
+ *   - Test-scoped [DataStore]<[Preferences]> via [PreferenceDataStoreFactory.create] pointed at
+ *     a unique temporary directory per test, cleared in [tearDown].
+ *
+ * All 11 tests are expected to FAIL (red) until [CatalogRepositoryImpl] is rewritten for MOBILE-29.
+ * The current implementation:
+ *   - has no [DataStore] constructor parameter
+ *   - exposes [catalogOn(String)] not [isEnabled(Int)]
+ *   - calls [CatalogApi.getCatalogs()] with no query params (old flat-map contract)
+ * None of those match the new contract, so every test in this file will fail to compile or
+ * fail at runtime until the full MOBILE-29 implementation lands.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CatalogRepositoryImplTest {
 
     private val mockWebServer = MockWebServer()
 
-    // StandardTestDispatcher: coroutines are NOT run eagerly — tests call refresh() manually.
-    // This prevents the init{} polling loop from consuming server responses before the test body
-    // has a chance to enqueue them (PLAN.md §Risks — "Polling loop fires on init{} caveat").
+    // StandardTestDispatcher: coroutines scheduled but NOT run eagerly.
+    // Tests call refresh() manually and drive time via advanceUntilIdle().
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
 
+    // Mirrors the production Json provided by NetworkModule (ignoreUnknownKeys = true).
+    private val testJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
+
     private lateinit var catalogApi: CatalogApi
+    private lateinit var dataStore: DataStore<Preferences>
     private lateinit var repository: CatalogRepositoryImpl
+
+    // Unique temp dir per test so DataStore files never bleed between tests.
+    private val tempDir: File = File(
+        System.getProperty("java.io.tmpdir"),
+        "catalog_test_${UUID.randomUUID()}",
+    ).also { it.mkdirs() }
 
     @Before
     fun setUp() {
@@ -69,10 +90,15 @@ class CatalogRepositoryImplTest {
 
         catalogApi = retrofit.create(CatalogApi::class.java)
 
-        // Construct the repo. With StandardTestDispatcher the init{} launch is scheduled but
-        // NOT yet executed — the test body controls when coroutines run via advanceUntilIdle().
+        dataStore = PreferenceDataStoreFactory.create(
+            scope = testScope,
+            produceFile = { File(tempDir, "catalog_prefs.preferences_pb") },
+        )
+
         repository = CatalogRepositoryImpl(
+            dataStore = dataStore,
             catalogApi = catalogApi,
+            json = testJson,
             ioDispatcher = testDispatcher,
         )
     }
@@ -80,162 +106,344 @@ class CatalogRepositoryImplTest {
     @After
     fun tearDown() {
         mockWebServer.shutdown()
+        tempDir.deleteRecursively()
     }
 
-    // -------------------------------------------------------------------------
-    // 1. refresh() parses true and false flags correctly
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // 1. changed:true response replaces flag map and persists version
+    // =========================================================================
 
     @Test
-    fun `getCatalogs parses true and false flags correctly`() = testScope.runTest {
+    fun `changed true response replaces flag map and persists version`() = testScope.runTest {
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
-                .setBody("""{"a":true,"b":false}"""),
+                .setBody("""{"changed":true,"version":7,"catalogs":{"100001":true,"100002":false}}"""),
         )
 
         repository.refresh()
 
         assertTrue(
-            "catalogOn(\"a\") must be true when the server returned \"a\":true",
-            repository.catalogOn("a"),
+            "isEnabled(100001) must be true when server returned \"100001\":true",
+            repository.isEnabled(100001),
         )
         assertFalse(
-            "catalogOn(\"b\") must be false when the server returned \"b\":false",
-            repository.catalogOn("b"),
+            "isEnabled(100002) must be false when server returned \"100002\":false",
+            repository.isEnabled(100002),
+        )
+
+        // Verify DataStore persistence — the impl must write version and JSON map.
+        val prefs = dataStore.data.first()
+        val persistedVersion = prefs[intPreferencesKey("catalog_version")]
+        val persistedMapJson = prefs[stringPreferencesKey("catalog_map_json")]
+
+        assertTrue(
+            "DataStore must persist catalog_version == 7, got $persistedVersion",
+            persistedVersion == 7,
+        )
+        assertTrue(
+            "DataStore catalog_map_json must contain key 100001, got $persistedMapJson",
+            persistedMapJson?.contains("100001") == true,
+        )
+        assertTrue(
+            "DataStore catalog_map_json must contain key 100002, got $persistedMapJson",
+            persistedMapJson?.contains("100002") == true,
         )
     }
 
-    // -------------------------------------------------------------------------
-    // 1b. catalogOn(flag, default) — explicit server false beats a default=true;
-    //     a missing key returns the caller's default (the Option-A mechanism).
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // 2. changed:false response is a no-op
+    // =========================================================================
 
     @Test
-    fun `catalogOn with default honours explicit false and falls back only when absent`() =
-        testScope.runTest {
-            mockWebServer.enqueue(
-                MockResponse()
-                    .setResponseCode(200)
-                    .setHeader("Content-Type", "application/json")
-                    .setBody("""{"b":false}"""),
-            )
-
-            repository.refresh()
-
-            assertFalse(
-                "An explicit server-side false must win over a caller default=true",
-                repository.catalogOn("b", default = true),
-            )
-            assertTrue(
-                "A genuinely absent key must return the caller's default=true (Option A)",
-                repository.catalogOn("absent", default = true),
-            )
-            assertFalse(
-                "A genuinely absent key must return the caller's default=false",
-                repository.catalogOn("absent", default = false),
-            )
-        }
-
-    // -------------------------------------------------------------------------
-    // 2. catalogOn returns false for a key absent from the response
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `catalogOn returns false for a missing flag`() = testScope.runTest {
+    fun `changed false response is a no-op`() = testScope.runTest {
+        // First refresh: populate map with 100001=true, version=5.
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
-                .setBody("""{"x":true}"""),
-        )
-
-        repository.refresh()
-
-        assertFalse(
-            "catalogOn(\"missing\") must be false when the key is absent from the server map",
-            repository.catalogOn("missing"),
-        )
-    }
-
-    // -------------------------------------------------------------------------
-    // 3. Fail-open: second refresh that errors keeps last-known map and never throws
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `refresh failure keeps last-known map and never throws`() = testScope.runTest {
-        // First refresh: successful — populate the map with {"a":true}.
-        mockWebServer.enqueue(
-            MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "application/json")
-                .setBody("""{"a":true}"""),
+                .setBody("""{"changed":true,"version":5,"catalogs":{"100001":true}}"""),
         )
         repository.refresh()
 
         assertTrue(
-            "Precondition: catalogOn(\"a\") must be true after a successful refresh",
-            repository.catalogOn("a"),
+            "Precondition: isEnabled(100001) must be true after first refresh",
+            repository.isEnabled(100001),
         )
 
-        // Second refresh: server is shut down → IOException. refresh() must not propagate it.
+        // Second refresh: server says nothing changed.
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":false,"version":5}"""),
+        )
+        repository.refresh()
+
+        // Map must remain unchanged.
+        assertTrue(
+            "isEnabled(100001) must still be true after a changed:false no-op response",
+            repository.isEnabled(100001),
+        )
+
+        // DataStore version must still be 5 — no overwrite should have occurred.
+        val prefs = dataStore.data.first()
+        val persistedVersion = prefs[intPreferencesKey("catalog_version")]
+        assertTrue(
+            "DataStore catalog_version must still be 5 after a no-op response, got $persistedVersion",
+            persistedVersion == 5,
+        )
+    }
+
+    // =========================================================================
+    // 3. changed:true never merges — replaces whole map
+    // =========================================================================
+
+    @Test
+    fun `changed true replaces entire map not merges`() = testScope.runTest {
+        // First refresh: map has 100001=true and 100002=true.
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":true,"version":1,"catalogs":{"100001":true,"100002":true}}"""),
+        )
+        repository.refresh()
+
+        assertTrue("Precondition: 100001 must be true", repository.isEnabled(100001))
+        assertTrue("Precondition: 100002 must be true", repository.isEnabled(100002))
+
+        // Second refresh: changed:true but only 100001 is present (100002 is gone).
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":true,"version":2,"catalogs":{"100001":false}}"""),
+        )
+        repository.refresh()
+
+        assertFalse(
+            "100001 must be false after the second refresh set it explicitly to false",
+            repository.isEnabled(100001),
+        )
+        assertFalse(
+            "100002 must be false — absent from second refresh (whole-map replace, not merge)",
+            repository.isEnabled(100002),
+        )
+    }
+
+    // =========================================================================
+    // 4. missing id returns false (standard single-arg overload)
+    // =========================================================================
+
+    @Test
+    fun `missing id returns false with single-arg isEnabled`() = testScope.runTest {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":true,"version":1,"catalogs":{"100001":true}}"""),
+        )
+        repository.refresh()
+
+        assertFalse(
+            "isEnabled(99999) must be false when 99999 is absent from the server map",
+            repository.isEnabled(99999),
+        )
+    }
+
+    // =========================================================================
+    // 5. isEnabled(id, default=true) with explicit server false — explicit value wins
+    // =========================================================================
+
+    @Test
+    fun `isEnabled with default true but explicit server false returns false`() = testScope.runTest {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":true,"version":1,"catalogs":{"100001":false}}"""),
+        )
+        repository.refresh()
+
+        assertFalse(
+            "An explicit server-side false must win over a caller default=true",
+            repository.isEnabled(100001, default = true),
+        )
+    }
+
+    // =========================================================================
+    // 6. isEnabled(id, default=true) with absent key — returns default (Option-A)
+    // =========================================================================
+
+    @Test
+    fun `isEnabled with absent key returns caller default Option-A`() = testScope.runTest {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                // Only 100001 is present; id=0 is intentionally absent.
+                .setBody("""{"changed":true,"version":1,"catalogs":{"100001":true}}"""),
+        )
+        repository.refresh()
+
+        assertTrue(
+            "isEnabled(0, default=true) must return true — absent id falls back to caller default",
+            repository.isEnabled(0, default = true),
+        )
+        assertFalse(
+            "isEnabled(0, default=false) must return false — absent id falls back to caller default",
+            repository.isEnabled(0, default = false),
+        )
+    }
+
+    // =========================================================================
+    // 7. network failure keeps last-known map and never throws
+    // =========================================================================
+
+    @Test
+    fun `network failure keeps last-known map and never throws`() = testScope.runTest {
+        // First refresh: successful — 100001=true.
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":true,"version":3,"catalogs":{"100001":true}}"""),
+        )
+        repository.refresh()
+
+        assertTrue(
+            "Precondition: isEnabled(100001) must be true after successful refresh",
+            repository.isEnabled(100001),
+        )
+
+        // Shut down the server — next call will throw IOException.
         mockWebServer.shutdown()
 
-        // Must not throw — the fail-open contract swallows all non-cancellation exceptions.
+        // Must not throw — fail-open contract swallows IOException.
         repository.refresh()
 
-        // The last-known map must be intact.
+        // Last-known map must still be intact.
         assertTrue(
-            "catalogOn(\"a\") must still be true after a failed second refresh (fail-open)",
-            repository.catalogOn("a"),
+            "isEnabled(100001) must still be true after a network failure (last-known-good)",
+            repository.isEnabled(100001),
         )
     }
 
-    // -------------------------------------------------------------------------
-    // 4. Initial state: before any refresh all flags are false (emptyMap default)
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // 8. HTTP 500 on second refresh keeps last-known map
+    // =========================================================================
 
     @Test
-    fun `initial state before any refresh returns all false`() = testScope.runTest {
-        // No refresh() called. The init{} loop is scheduled but not yet executed because
-        // StandardTestDispatcher does not run eagerly. We verify the cold-start default.
-        // advanceUntilIdle is deliberately NOT called — we test the snapshot at construction time.
-        assertFalse(
-            "catalogOn(\"anything\") must be false before any refresh has succeeded",
-            repository.catalogOn("anything"),
-        )
-    }
-
-    // -------------------------------------------------------------------------
-    // 5. HTTP 500 on second refresh keeps last-known map
-    // -------------------------------------------------------------------------
-
-    @Test
-    fun `refresh with HTTP error response keeps last-known map`() = testScope.runTest {
+    fun `HTTP 500 on second refresh keeps last-known map`() = testScope.runTest {
         // First refresh: successful.
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(200)
                 .setHeader("Content-Type", "application/json")
-                .setBody("""{"flag":true}"""),
+                .setBody("""{"changed":true,"version":4,"catalogs":{"100001":true}}"""),
         )
         repository.refresh()
 
         assertTrue(
-            "Precondition: catalogOn(\"flag\") must be true after a successful refresh",
-            repository.catalogOn("flag"),
+            "Precondition: isEnabled(100001) must be true after successful first refresh",
+            repository.isEnabled(100001),
         )
 
-        // Second refresh: server returns HTTP 500. refresh() must swallow the HttpException.
+        // Second refresh: HTTP 500.
         mockWebServer.enqueue(
             MockResponse().setResponseCode(500),
         )
         repository.refresh()
 
         assertTrue(
-            "catalogOn(\"flag\") must still be true after a 500 response on the second refresh",
-            repository.catalogOn("flag"),
+            "isEnabled(100001) must still be true after an HTTP 500 on second refresh",
+            repository.isEnabled(100001),
+        )
+    }
+
+    // =========================================================================
+    // 9. cold-start loads persisted map before first network fetch
+    //    (last-known-good on restart)
+    // =========================================================================
+
+    @Test
+    fun `cold-start loads persisted map before first network fetch`() = testScope.runTest {
+        // Manually seed DataStore — simulates a previously written state surviving process death.
+        dataStore.updateData { prefs ->
+            prefs.toMutablePreferences().apply {
+                set(intPreferencesKey("catalog_version"), 1)
+                set(stringPreferencesKey("catalog_map_json"), """{"100001":true}""")
+            }
+        }
+
+        // Construct a NEW instance without calling refresh(), simulating a cold start.
+        // The init{} block must read the persisted DataStore and seed the in-memory StateFlow.
+        val coldStartRepo = CatalogRepositoryImpl(
+            dataStore = dataStore,
+            catalogApi = catalogApi,
+            json = testJson,
+            ioDispatcher = testDispatcher,
+        )
+
+        // Advance the dispatcher so the init{} seed coroutine can execute.
+        advanceUntilIdle()
+
+        assertTrue(
+            "isEnabled(100001) must be true on cold start — seeded from persisted DataStore",
+            coldStartRepo.isEnabled(100001),
+        )
+    }
+
+    // =========================================================================
+    // 10. initial state with empty DataStore returns false for all ids
+    // =========================================================================
+
+    @Test
+    fun `initial state with empty DataStore returns false for all ids`() = testScope.runTest {
+        // repo was constructed in setUp() with an empty DataStore; refresh() not called.
+        // The poll loop coroutine is scheduled but not yet executed (StandardTestDispatcher).
+        assertFalse(
+            "isEnabled(100001) must be false before any refresh or DataStore seed",
+            repository.isEnabled(100001),
+        )
+        assertFalse(
+            "isEnabled(0) must be false before any refresh or DataStore seed",
+            repository.isEnabled(0),
+        )
+    }
+
+    // =========================================================================
+    // 11. changed:true with null catalogs field is malformed → keep last-known-good (no wipe, no crash)
+    // =========================================================================
+
+    @Test
+    fun `changed true with null catalogs keeps last-known-good map`() = testScope.runTest {
+        // First: a valid snapshot establishes last-known-good.
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":true,"version":8,"catalogs":{"100001":true}}"""),
+        )
+        repository.refresh()
+
+        // Then: malformed changed:true with the "catalogs" key omitted. A null snapshot on
+        // changed:true is malformed; the impl must NOT wipe the cached map to empty.
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"changed":true,"version":9}"""),
+        )
+
+        // Must not throw.
+        repository.refresh()
+
+        assertTrue(
+            "isEnabled(100001) must stay true — malformed null catalogs must not wipe last-known-good",
+            repository.isEnabled(100001),
         )
     }
 }

@@ -88,6 +88,9 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.kotlinx.serialization.json)
 
+    // DataStore
+    implementation(libs.androidx.datastore.preferences)
+
     // Firebase (google-services plugin applied above)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
