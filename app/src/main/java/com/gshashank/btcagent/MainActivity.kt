@@ -4,14 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
@@ -20,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import com.gshashank.btcagent.ui.auth.LoginScreen
 import com.gshashank.btcagent.ui.gate.GateScreen
 import com.gshashank.btcagent.ui.navigation.Route
+import com.gshashank.btcagent.ui.shell.AppShell
 import com.gshashank.btcagent.ui.theme.BTCAgentTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -79,18 +76,7 @@ private fun AppNavHost() {
         }
 
         composable<Route.Home> {
-            // Placeholder until the Home screen feature lands.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Home — authenticated",
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
+            AppShell()
         }
     }
 }
