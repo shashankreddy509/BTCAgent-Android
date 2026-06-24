@@ -1,5 +1,7 @@
 package com.gshashank.btcagent.data.repository
 
+import kotlinx.coroutines.flow.Flow
+
 /**
  * Provides access to runtime catalog feature flags.
  *
@@ -10,6 +12,14 @@ package com.gshashank.btcagent.data.repository
 interface CatalogRepository {
     /** Fetches the latest catalog from the server. NEVER throws; fail-open. */
     suspend fun refresh()
+
+    /**
+     * Observes [id] as a [Flow] that re-emits whenever the catalog map changes (e.g. the
+     * startup fetch lands after the screen has already composed). Emits [default] while [id]
+     * is absent. Use this from ViewModels so the UI reacts to a late fetch instead of
+     * capturing a stale value at construction time.
+     */
+    fun isEnabledFlow(id: Int, default: Boolean = false): Flow<Boolean>
 
     /**
      * Returns the stored value for [id], or `false` if the id is absent or

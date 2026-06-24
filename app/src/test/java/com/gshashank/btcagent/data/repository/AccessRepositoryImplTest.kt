@@ -393,4 +393,7 @@ private class FakeCatalogRepository(
 
     override fun isEnabled(id: Int, default: Boolean): Boolean =
         if (flagMissing) default else flagOn
+
+    override fun isEnabledFlow(id: Int, default: Boolean): kotlinx.coroutines.flow.Flow<Boolean> =
+        kotlinx.coroutines.flow.flowOf(if (flagMissing) default else flagOn)
 }
