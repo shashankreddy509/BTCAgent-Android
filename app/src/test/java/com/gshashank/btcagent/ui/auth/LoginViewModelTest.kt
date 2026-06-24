@@ -201,7 +201,7 @@ class LoginViewModelTest {
 
         assertFalse(
             "isMockLayout must be false when ${CatalogFlags.LOGIN_MOCK} is OFF",
-            vm.isMockLayout,
+            vm.isMockLayout.value,
         )
     }
 
@@ -219,7 +219,7 @@ class LoginViewModelTest {
 
         assertTrue(
             "isMockLayout must be true when ${CatalogFlags.LOGIN_MOCK} is ON",
-            vm.isMockLayout,
+            vm.isMockLayout.value,
         )
     }
 }
@@ -265,4 +265,7 @@ private class FakeCatalogRepository(private val flagValue: Boolean) : CatalogRep
     override fun isEnabled(id: Int): Boolean = flagValue
 
     override fun isEnabled(id: Int, default: Boolean): Boolean = flagValue
+
+    override fun isEnabledFlow(id: Int, default: Boolean): kotlinx.coroutines.flow.Flow<Boolean> =
+        kotlinx.coroutines.flow.flowOf(flagValue)
 }

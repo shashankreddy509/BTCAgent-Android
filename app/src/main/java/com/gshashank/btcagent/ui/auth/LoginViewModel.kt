@@ -14,8 +14,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 import javax.inject.Inject
@@ -33,8 +35,18 @@ class LoginViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
 
-    /** True when the catalog flag [CatalogFlags.LOGIN_MOCK] is ON. */
-    val isMockLayout: Boolean = catalogRepository.isEnabled(CatalogFlags.LOGIN_MOCK)
+    /**
+     * True when the catalog flag [CatalogFlags.LOGIN_MOCK] is ON. Exposed as a [StateFlow]
+     * (not a captured Boolean) so the login screen flips to the mock layout when the startup
+     * catalog fetch lands after first composition. Seeds with the current synchronous value.
+     */
+    val isMockLayout: StateFlow<Boolean> =
+        catalogRepository.isEnabledFlow(CatalogFlags.LOGIN_MOCK)
+            .stateIn(
+                scope = scope,
+                started = SharingStarted.Eagerly,
+                initialValue = catalogRepository.isEnabled(CatalogFlags.LOGIN_MOCK),
+            )
 
     fun onGoogleSignIn(activity: Activity) {
         scope.launch {

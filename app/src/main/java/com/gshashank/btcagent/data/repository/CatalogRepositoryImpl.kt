@@ -13,8 +13,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,10 +66,10 @@ class CatalogRepositoryImpl @Inject constructor(
             }
         }
 
-        // Seed from persisted DataStore. This coroutine runs on ioDispatcher so that in
-        // tests with StandardTestDispatcher, advanceUntilIdle() drives it to completion
-        // before the first real network call (which suspends in real I/O and releases the
-        // test scheduler). This ensures cold-start reads are visible after advanceUntilIdle().
+        // Seed the in-memory map from persisted DataStore so isEnabled() returns last-known-good
+        // immediately on a warm start. The FIRST network fetch is triggered explicitly by
+        // BtcApplication.onCreate (via refresh()), NOT here — keeping init free of network I/O
+        // makes the repo deterministic under test (tests construct it and drive refresh() manually).
         scope.launch {
             try {
                 val prefs = dataStore.data.first()
@@ -83,10 +86,8 @@ class CatalogRepositoryImpl @Inject constructor(
             }
         }
 
-        // Launch background poll loop. Delay is placed BEFORE the first refresh so that in
-        // tests using StandardTestDispatcher the loop does not eagerly consume MockWebServer
-        // responses before the test's explicit refresh() calls. In production the DataStore
-        // seed covers the startup window and the first network fetch fires after one interval.
+        // Background poll loop. The leading delay means this loop does NOT perform the startup
+        // fetch (BtcApplication does that explicitly); it only keeps the catalog fresh thereafter.
         scope.launch {
             while (isActive) {
                 delay(POLL_INTERVAL_MS)
@@ -126,4 +127,9 @@ class CatalogRepositoryImpl @Inject constructor(
 
     override fun isEnabled(id: Int, default: Boolean): Boolean =
         flags.value.getOrDefault(id.toString(), default)
+
+    override fun isEnabledFlow(id: Int, default: Boolean): Flow<Boolean> =
+        flags
+            .map { it.getOrDefault(id.toString(), default) }
+            .distinctUntilChanged()
 }

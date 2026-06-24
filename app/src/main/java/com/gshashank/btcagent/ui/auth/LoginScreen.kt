@@ -425,6 +425,7 @@ fun LoginScreen(
     onAuthenticated: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isMockLayout by viewModel.isMockLayout.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     LaunchedEffect(uiState) {
@@ -435,7 +436,7 @@ fun LoginScreen(
 
     LoginContent(
         uiState = uiState,
-        isMockLayout = viewModel.isMockLayout,
+        isMockLayout = isMockLayout,
         onGoogleSignIn = {
             // Cast is safe: LoginScreen is always hosted inside an Activity context.
             val activity = context as? Activity
