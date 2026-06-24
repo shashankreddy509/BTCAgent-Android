@@ -34,6 +34,12 @@ class CatalogRepositoryImpl @Inject constructor(
     // persisted-schema addition, wiping flags to empty on cold-start decode.
     private val json: Json,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    // Dispatcher backing the long-lived background scope (seed + poll loop). Hilt binds it to the
+    // same @IoDispatcher as ioDispatcher, so production is unchanged (same IO pool). It exists as a
+    // unit-test seam: tests pass a SEPARATE scheduler so testScope.runTest cannot auto-advance
+    // virtual time past POLL_INTERVAL_MS and fire a stray refresh() that races the test's explicit
+    // refresh and desyncs the MockWebServer queue (flaky — MOBILE-32).
+    @IoDispatcher backgroundDispatcher: CoroutineDispatcher = ioDispatcher,
 ) : CatalogRepository {
 
     companion object {
@@ -51,7 +57,8 @@ class CatalogRepositoryImpl @Inject constructor(
     private var cachedVersion: Int = 0
 
     // SupervisorJob: a thrown child must not cancel the sibling poll loop (process-lifetime scope).
-    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
+    // Uses backgroundDispatcher (== ioDispatcher in prod) so tests can isolate the poll loop's clock.
+    private val scope = CoroutineScope(SupervisorJob() + backgroundDispatcher)
 
     init {
         // Defensive backstop: the security-sensitive USER_ACCESS_STATUS gate must have a real

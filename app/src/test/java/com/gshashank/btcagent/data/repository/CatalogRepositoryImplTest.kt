@@ -65,6 +65,13 @@ class CatalogRepositoryImplTest {
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
 
+    // SEPARATE scheduler for the repo's background scope (seed + poll loop). Because it is a
+    // distinct TestCoroutineScheduler, testScope.runTest never auto-advances it, so the 10-minute
+    // poll-loop delay never elapses during a test and cannot fire a stray refresh() that desyncs
+    // the MockWebServer queue (MOBILE-32). Tests that need the seed coroutine to run (cold-start)
+    // advance this dispatcher explicitly.
+    private val backgroundDispatcher = StandardTestDispatcher()
+
     // Mirrors the production Json provided by NetworkModule (ignoreUnknownKeys = true).
     private val testJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
@@ -101,6 +108,7 @@ class CatalogRepositoryImplTest {
             catalogApi = catalogApi,
             json = testJson,
             ioDispatcher = testDispatcher,
+            backgroundDispatcher = backgroundDispatcher,
         )
     }
 
@@ -386,10 +394,15 @@ class CatalogRepositoryImplTest {
             catalogApi = catalogApi,
             json = testJson,
             ioDispatcher = testDispatcher,
+            backgroundDispatcher = backgroundDispatcher,
         )
 
-        // Advance the dispatcher so the init{} seed coroutine can execute.
+        // The seed coroutine runs on backgroundDispatcher, but its dataStore.data.first() suspends
+        // on the DataStore's own scope (testScope). Advance BOTH schedulers so the seed completes:
+        // backgroundDispatcher runs the coroutine, the test scheduler services the DataStore read.
+        backgroundDispatcher.scheduler.advanceUntilIdle()
         advanceUntilIdle()
+        backgroundDispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(
             "isEnabled(100001) must be true on cold start — seeded from persisted DataStore",
