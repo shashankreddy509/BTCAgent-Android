@@ -2,17 +2,12 @@ package com.gshashank.btcagent.ui.auth
 
 import android.app.Activity
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.gshashank.btcagent.data.repository.AuthRepository
 import com.gshashank.btcagent.data.repository.CatalogFlags
 import com.gshashank.btcagent.data.repository.CatalogRepository
 import com.gshashank.btcagent.data.repository.UserCancelledException
-import com.gshashank.btcagent.di.MainDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,11 +21,7 @@ import javax.inject.Inject
 class LoginViewModel @Inject constructor(
     private val repository: AuthRepository,
     private val catalogRepository: CatalogRepository,
-    @MainDispatcher mainDispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
 ) : ViewModel() {
-
-    // Use an injected scope so tests can drive coroutines without Dispatchers.Main.
-    private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
 
     private val _uiState = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
@@ -43,13 +34,13 @@ class LoginViewModel @Inject constructor(
     val isMockLayout: StateFlow<Boolean> =
         catalogRepository.isEnabledFlow(CatalogFlags.LOGIN_MOCK)
             .stateIn(
-                scope = scope,
+                scope = viewModelScope,
                 started = SharingStarted.Eagerly,
                 initialValue = catalogRepository.isEnabled(CatalogFlags.LOGIN_MOCK),
             )
 
     fun onGoogleSignIn(activity: Activity) {
-        scope.launch {
+        viewModelScope.launch {
             _uiState.value = LoginUiState.Loading
             // yield() ensures the Loading emission is observed by collectors before the
             // repository call (and its result) runs. This prevents StateFlow conflation
@@ -67,10 +58,5 @@ class LoginViewModel @Inject constructor(
                 },
             )
         }
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        scope.cancel()
     }
 }

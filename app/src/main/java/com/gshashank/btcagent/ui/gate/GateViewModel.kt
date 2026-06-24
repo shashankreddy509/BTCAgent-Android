@@ -2,16 +2,12 @@ package com.gshashank.btcagent.ui.gate
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.gshashank.btcagent.data.repository.AccessRepository
 import com.gshashank.btcagent.data.repository.AccessResult
 import com.gshashank.btcagent.data.repository.AuthRepository
-import com.gshashank.btcagent.di.MainDispatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,10 +19,8 @@ import javax.inject.Inject
  * ViewModel for the Gate screen.
  *
  * Checks whether the signed-in user is on the allow-list and exposes the result as a
- * [StateFlow<GateUiState>]. Uses the same injected-scope pattern as [LoginViewModel]:
- * a [CoroutineScope] backed by [SupervisorJob] + the injected [mainDispatcher] so tests
- * can substitute [kotlinx.coroutines.test.UnconfinedTestDispatcher] and drive emissions
- * synchronously without [kotlinx.coroutines.Dispatchers.Main].
+ * [StateFlow<GateUiState>]. Uses [viewModelScope] (auto-cancelled when the ViewModel is cleared)
+ * so no manual scope management is needed.
  *
  * [delay] (1 ms of virtual time) after setting [GateUiState.Loading] creates a genuine
  * suspension point that defers the repository call until [kotlinx.coroutines.test.runTest]
@@ -39,10 +33,7 @@ import javax.inject.Inject
 class GateViewModel @Inject constructor(
     private val accessRepository: AccessRepository,
     private val authRepository: AuthRepository,
-    @MainDispatcher mainDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
-
-    private val scope = CoroutineScope(SupervisorJob() + mainDispatcher)
 
     private val _uiState = MutableStateFlow<GateUiState>(GateUiState.Loading)
     val uiState: StateFlow<GateUiState> = _uiState.asStateFlow()
@@ -56,7 +47,7 @@ class GateViewModel @Inject constructor(
 
     private fun checkAccess() {
         accessCheckJob?.cancel()
-        accessCheckJob = scope.launch {
+        accessCheckJob = viewModelScope.launch {
             _uiState.value = GateUiState.Loading
             // delay(1L) creates a real virtual-time suspension point so that runTest can
             // advance its clock and allow Turbine to observe the Loading state before the
@@ -92,10 +83,5 @@ class GateViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "GateViewModel"
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        scope.cancel()
     }
 }

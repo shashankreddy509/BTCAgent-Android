@@ -115,7 +115,10 @@ class CatalogRepositoryImpl @Inject constructor(
                     prefs[KEY_VERSION] = response.version
                 }
             }
-            // changed == false (or malformed null catalogs) → no-op, keep last-known-good
+            // changed:false (or a malformed changed:true with null catalogs) → no-op, keep
+            // last-known-good. Backend contract: on changed:false the server returns the same
+            // version it received; the version can never advance on a no-op response, so no
+            // cachedVersion write is needed.
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
