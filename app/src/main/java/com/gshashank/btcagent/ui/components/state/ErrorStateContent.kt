@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.gshashank.btcagent.ui.theme.MonoFontFamily
 
@@ -75,7 +76,10 @@ fun ErrorStateContent(
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onRetry) {
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.testTag("dashboard_retry"),
+        ) {
             Text("Try again")
         }
     }

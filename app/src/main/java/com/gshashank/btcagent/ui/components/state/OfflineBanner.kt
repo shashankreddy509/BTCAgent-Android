@@ -1,6 +1,7 @@
 package com.gshashank.btcagent.ui.components.state
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +35,12 @@ import kotlinx.coroutines.delay
  * The "N ago" string ticks: a [LaunchedEffect] re-reads the clock every 60s so a long offline
  * session does not show a frozen elapsed time. The caller owns [lastUpdatedMs] (the staleness epoch).
  *
+ * testTags (each on a separate node):
+ *  - [testTag("scaffold_offline_banner")] on the inner Surface for kit-level tests
+ *    (DataStateScaffoldTest).
+ *  - [testTag("dashboard_offline")] on the outer Box for Dashboard screen tests
+ *    (DashboardScreenTest).
+ *
  * @param lastUpdatedMs Epoch-milliseconds of the last successful data fetch.
  */
 @Composable
@@ -51,25 +58,32 @@ fun OfflineBanner(
     val elapsedMinutes = ((nowMs - lastUpdatedMs) / 60_000L).coerceAtLeast(0L)
     val agoText = if (elapsedMinutes < 60L) "${elapsedMinutes}m ago" else "${elapsedMinutes / 60}h ago"
 
-    Surface(
+    // Outer Box carries the "dashboard_offline" testTag consumed by DashboardScreenTest.
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("scaffold_offline_banner"),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        tonalElevation = 1.dp,
+            .testTag("dashboard_offline"),
     ) {
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .testTag("scaffold_offline_banner"),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            tonalElevation = 1.dp,
         ) {
-            Text(
-                text = "You're offline — showing last cached data · $agoText",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "You're offline — showing last cached data · $agoText",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
     }
 }
