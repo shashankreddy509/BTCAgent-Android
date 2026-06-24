@@ -24,6 +24,8 @@ sealed interface MarketsRoute {
 // Inner tab start destinations (graph-level only, not top-level routes)
 sealed interface HomeTab {
     @Serializable data object Hub : HomeTab
+    @Serializable data object Positions : HomeTab
+    @Serializable data class PositionDetail(val signalId: String) : HomeTab
 }
 
 sealed interface TradeTab {

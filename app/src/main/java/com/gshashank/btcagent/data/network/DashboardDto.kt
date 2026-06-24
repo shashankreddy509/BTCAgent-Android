@@ -9,6 +9,7 @@ data class TradingStateDto(
     val positions: List<PositionDto> = emptyList(),
     val history: List<TradeResultDto> = emptyList(),
     val settings: SettingsDto,
+    @SerialName("current_price") val currentPrice: Double = 0.0,
 )
 
 @Serializable
@@ -19,6 +20,11 @@ data class PositionDto(
     val status: String? = null,
     val mode: String? = null,
     val pnl: Double? = null,
+    val sl: Double? = null,
+    val tp: Double? = null,
+    val qty: Double? = null,
+    @SerialName("opened_at") val openedAt: String? = null,
+    @SerialName("contract_size") val contractSize: Double? = null,
 )
 
 @Serializable

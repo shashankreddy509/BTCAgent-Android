@@ -13,11 +13,21 @@ import com.gshashank.btcagent.ui.components.state.UiState
  *
  * Collects [DashboardViewModel.uiState] reactively and delegates rendering to
  * [DashboardScreenContent]. Mounts unconditionally (no catalog flag — Decision 1 in PLAN.md).
+ *
+ * @param onPositionsClick Called when the user taps the Open Positions card to navigate to
+ *   the MOBILE-6 positions list (wired from the host NavGraph in [AppShell]).
  */
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+fun DashboardScreen(
+    onPositionsClick: () -> Unit = {},
+    viewModel: DashboardViewModel = hiltViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    DashboardScreenContent(uiState = uiState, onRetry = viewModel::retry)
+    DashboardScreenContent(
+        uiState = uiState,
+        onRetry = viewModel::retry,
+        onPositionsClick = onPositionsClick,
+    )
 }
 
 /**
@@ -33,11 +43,17 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
 fun DashboardScreenContent(
     uiState: UiState<DashboardData>,
     onRetry: () -> Unit,
+    onPositionsClick: () -> Unit = {},
 ) {
     DataStateScaffold(
         uiState = uiState,
         skeleton = { DashboardHeroSkeleton() },
-        content = { data -> DashboardHeroContent(data = data) },
+        content = { data ->
+            DashboardHeroContent(
+                data = data,
+                onPositionsClick = onPositionsClick,
+            )
+        },
         onRetry = onRetry,
     )
 }

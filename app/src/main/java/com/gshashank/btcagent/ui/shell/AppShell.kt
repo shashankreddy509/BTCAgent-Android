@@ -13,6 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.gshashank.btcagent.ui.home.HomeTabScreen
 import com.gshashank.btcagent.ui.markets.MarketsHubScreen
 import com.gshashank.btcagent.ui.markets.stubs.AnalyticsScreen
@@ -28,6 +29,8 @@ import com.gshashank.btcagent.ui.navigation.ReportsTab
 import com.gshashank.btcagent.ui.navigation.SettingsTab
 import com.gshashank.btcagent.ui.navigation.TabGraph
 import com.gshashank.btcagent.ui.navigation.TradeTab
+import com.gshashank.btcagent.ui.positions.PositionDetailScreen
+import com.gshashank.btcagent.ui.positions.PositionsListScreen
 import com.gshashank.btcagent.ui.reports.ReportsScreen
 import com.gshashank.btcagent.ui.settings.SettingsScreen
 import com.gshashank.btcagent.ui.trade.TradeScreen
@@ -67,7 +70,27 @@ fun AppShell() {
             modifier = Modifier.padding(innerPadding),
         ) {
             navigation<TabGraph.Home>(startDestination = HomeTab.Hub::class) {
-                composable<HomeTab.Hub> { HomeTabScreen() }
+                composable<HomeTab.Hub> {
+                    HomeTabScreen(
+                        onPositionsClick = {
+                            navController.navigate(HomeTab.Positions)
+                        },
+                    )
+                }
+                composable<HomeTab.Positions> {
+                    PositionsListScreen(
+                        onPositionClick = { id ->
+                            navController.navigate(HomeTab.PositionDetail(id))
+                        },
+                    )
+                }
+                composable<HomeTab.PositionDetail> { entry ->
+                    val route = entry.toRoute<HomeTab.PositionDetail>()
+                    PositionDetailScreen(
+                        signalId = route.signalId,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
             navigation<TabGraph.Markets>(startDestination = MarketsRoute.Hub::class) {
                 composable<MarketsRoute.Hub> {
