@@ -18,6 +18,7 @@ import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -446,4 +447,82 @@ class CatalogRepositoryImplTest {
             repository.isEnabled(100001),
         )
     }
+
+    // =========================================================================
+    // 12. changed:false version contract — cachedVersion and persisted map are
+    //     unchanged (MOBILE-30 Item-3)
+    //
+    // Backend contract (verified in btc-ai-agent/web/app.py:897-917):
+    //   When version == server_ver the response is {changed:false, version:N}.
+    //   The server returns the same version it received; the version can NEVER advance
+    //   on a changed:false response. The client no-op is therefore correct and must be
+    //   locked by this test so no future refactor accidentally writes cachedVersion on
+    //   a no-op response.
+    // =========================================================================
+
+    @Test
+    fun `refresh changedFalse does not advance cachedVersion or overwrite persisted map`() =
+        testScope.runTest {
+            // Step 1: seed version=5 and a known map via a successful changed:true fetch.
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"changed":true,"version":5,"catalogs":{"100001":true,"100002":false}}"""),
+            )
+            repository.refresh()
+
+            // Capture the DataStore state after the first (changed:true) fetch.
+            val prefsAfterFirstFetch = dataStore.data.first()
+            val versionAfterFirstFetch = prefsAfterFirstFetch[intPreferencesKey("catalog_version")]
+            val mapJsonAfterFirstFetch = prefsAfterFirstFetch[stringPreferencesKey("catalog_map_json")]
+
+            assertEquals(
+                "Precondition: catalog_version must be 5 after first changed:true fetch",
+                5,
+                versionAfterFirstFetch,
+            )
+            assertTrue(
+                "Precondition: persisted map must contain 100001 after first fetch",
+                mapJsonAfterFirstFetch?.contains("100001") == true,
+            )
+
+            // Step 2: server responds with changed:false, version=5 — this is the no-op path.
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"changed":false,"version":5}"""),
+            )
+            repository.refresh()
+
+            // Assert: in-memory flags are unchanged.
+            assertTrue(
+                "isEnabled(100001) must remain true after a changed:false no-op",
+                repository.isEnabled(100001),
+            )
+            assertFalse(
+                "isEnabled(100002) must remain false after a changed:false no-op",
+                repository.isEnabled(100002),
+            )
+
+            // Assert: DataStore version must NOT have been overwritten — still 5.
+            val prefsAfterNoOp = dataStore.data.first()
+            val versionAfterNoOp = prefsAfterNoOp[intPreferencesKey("catalog_version")]
+            assertEquals(
+                "catalog_version in DataStore must remain 5 after changed:false — version must never " +
+                    "advance on a no-op response (backend contract: changed:false iff version==server_ver)",
+                5,
+                versionAfterNoOp,
+            )
+
+            // Assert: DataStore map JSON must NOT have been overwritten.
+            val mapJsonAfterNoOp = prefsAfterNoOp[stringPreferencesKey("catalog_map_json")]
+            assertEquals(
+                "catalog_map_json in DataStore must be identical after changed:false — no DataStore " +
+                    "write must occur on a no-op response",
+                mapJsonAfterFirstFetch,
+                mapJsonAfterNoOp,
+            )
+        }
 }

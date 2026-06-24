@@ -6,12 +6,14 @@ import com.google.firebase.auth.FirebaseUser
 import com.gshashank.btcagent.data.repository.AccessRepository
 import com.gshashank.btcagent.data.repository.AccessResult
 import com.gshashank.btcagent.data.repository.AuthRepository
+import com.gshashank.btcagent.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
@@ -21,11 +23,14 @@ import org.mockito.kotlin.whenever
  *
  * Uses [FakeAccessRepository] and [FakeGateAuthRepository] (hand-written fakes) so no real
  * Firebase or network calls are made.
- * [UnconfinedTestDispatcher] is substituted for `@MainDispatcher` to keep StateFlow emissions
- * synchronous and to drive coroutines inside [runTest].
+ * [MainDispatcherRule] installs [kotlinx.coroutines.test.UnconfinedTestDispatcher] as
+ * [kotlinx.coroutines.Dispatchers.Main] so that [viewModelScope]-backed coroutines are driven
+ * synchronously — replaces the old pattern of passing a dispatcher into the VM constructor.
  * Turbine's [test] extension collects [GateViewModel.uiState] synchronously.
  *
- * All tests are expected to FAIL until [GateViewModel] is implemented.
+ * Tests are expected to FAIL (red) until MOBILE-30 Item-2 migration removes the
+ * [mainDispatcher] constructor parameter from [GateViewModel] and replaces the manual
+ * [kotlinx.coroutines.CoroutineScope] with [androidx.lifecycle.viewModelScope].
  *
  * Test coverage:
  *   1. init emits Loading then Allowed.
@@ -39,10 +44,11 @@ import org.mockito.kotlin.whenever
 @OptIn(ExperimentalCoroutinesApi::class)
 class GateViewModelTest {
 
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
     private lateinit var fakeAccess: FakeAccessRepository
     private lateinit var fakeAuth: FakeGateAuthRepository
-
-    private val testDispatcher = UnconfinedTestDispatcher()
 
     // A mockito-kotlin mock for FirebaseUser so we can stub .email without subclassing.
     private val mockUser: FirebaseUser = mock()
@@ -53,11 +59,14 @@ class GateViewModelTest {
         fakeAuth = FakeGateAuthRepository()
     }
 
+    /**
+     * Constructs [GateViewModel] without a dispatcher param — after the MOBILE-30 migration
+     * the ViewModel uses [androidx.lifecycle.viewModelScope] internally.
+     */
     private fun createViewModel(): GateViewModel =
         GateViewModel(
             accessRepository = fakeAccess,
             authRepository = fakeAuth,
-            mainDispatcher = testDispatcher,
         )
 
     // -------------------------------------------------------------------------
@@ -65,12 +74,13 @@ class GateViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `init emits Loading then Allowed`() = runTest(testDispatcher) {
+    fun `init emits Loading then Allowed`() = runTest {
         fakeAccess.checkAccessResult = AccessResult.Allowed(admin = false)
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             assertEquals("First emission must be Loading", GateUiState.Loading, awaitItem())
+            advanceUntilIdle()
             assertEquals("Second emission must be Allowed", GateUiState.Allowed, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
@@ -81,7 +91,7 @@ class GateViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `init emits Loading then Pending with user email`() = runTest(testDispatcher) {
+    fun `init emits Loading then Pending with user email`() = runTest {
         fakeAccess.checkAccessResult = AccessResult.Pending
         // Set up a mock FirebaseUser whose email() returns the expected address.
         whenever(mockUser.email).thenReturn("user@example.com")
@@ -90,6 +100,7 @@ class GateViewModelTest {
 
         viewModel.uiState.test {
             assertEquals("First emission must be Loading", GateUiState.Loading, awaitItem())
+            advanceUntilIdle()
             val pending = awaitItem()
             assertTrue("Second emission must be Pending, got $pending", pending is GateUiState.Pending)
             assertEquals(
@@ -106,12 +117,13 @@ class GateViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `init emits Loading then Unauthorized`() = runTest(testDispatcher) {
+    fun `init emits Loading then Unauthorized`() = runTest {
         fakeAccess.checkAccessResult = AccessResult.Unauthorized
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             assertEquals("First emission must be Loading", GateUiState.Loading, awaitItem())
+            advanceUntilIdle()
             assertEquals("Second emission must be Unauthorized", GateUiState.Unauthorized, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
@@ -122,12 +134,13 @@ class GateViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `init emits Loading then Error`() = runTest(testDispatcher) {
+    fun `init emits Loading then Error`() = runTest {
         fakeAccess.checkAccessResult = AccessResult.Error(cause = null)
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             assertEquals("First emission must be Loading", GateUiState.Loading, awaitItem())
+            advanceUntilIdle()
             assertEquals("Second emission must be Error", GateUiState.Error, awaitItem())
             cancelAndIgnoreRemainingEvents()
         }
@@ -138,7 +151,7 @@ class GateViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `onRetry resets to Loading and re-runs access check`() = runTest(testDispatcher) {
+    fun `onRetry resets to Loading and re-runs access check`() = runTest {
         // Start in Error state.
         fakeAccess.checkAccessResult = AccessResult.Error(cause = null)
         val viewModel = createViewModel()
@@ -146,6 +159,7 @@ class GateViewModelTest {
         viewModel.uiState.test {
             // Consume the initial Loading + Error cycle.
             assertEquals(GateUiState.Loading, awaitItem())
+            advanceUntilIdle()
             assertEquals(GateUiState.Error, awaitItem())
 
             // Change the repository result before triggering the retry.
@@ -159,6 +173,7 @@ class GateViewModelTest {
                 GateUiState.Loading,
                 awaitItem(),
             )
+            advanceUntilIdle()
             // Then emit the new result (Allowed in this case).
             assertEquals(
                 "onRetry must emit the new access result after Loading",
@@ -174,13 +189,14 @@ class GateViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `onSignOut calls authRepository signOut and emits Unauthorized`() = runTest(testDispatcher) {
+    fun `onSignOut calls authRepository signOut and emits Unauthorized`() = runTest {
         fakeAccess.checkAccessResult = AccessResult.Allowed(admin = false)
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             // Consume initial Loading + Allowed cycle.
             assertEquals(GateUiState.Loading, awaitItem())
+            advanceUntilIdle()
             assertEquals(GateUiState.Allowed, awaitItem())
 
             viewModel.onSignOut()
@@ -203,13 +219,14 @@ class GateViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `Pending email is empty string when currentUser is null`() = runTest(testDispatcher) {
+    fun `Pending email is empty string when currentUser is null`() = runTest {
         fakeAccess.checkAccessResult = AccessResult.Pending
         fakeAuth.stubbedCurrentUser = null  // explicitly no signed-in user
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             assertEquals(GateUiState.Loading, awaitItem())
+            advanceUntilIdle()
             val pending = awaitItem()
             assertTrue("State must be Pending, got $pending", pending is GateUiState.Pending)
             assertEquals(

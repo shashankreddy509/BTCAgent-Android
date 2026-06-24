@@ -7,26 +7,35 @@ import com.gshashank.btcagent.data.repository.AuthRepository
 import com.gshashank.btcagent.data.repository.CatalogFlags
 import com.gshashank.btcagent.data.repository.CatalogRepository
 import com.gshashank.btcagent.data.repository.UserCancelledException
+import com.gshashank.btcagent.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 
 /**
  * Unit tests for [LoginViewModel].
  *
  * Uses [FakeAuthRepository] so no real Firebase or CredentialManager code executes.
- * All tests run on [UnconfinedTestDispatcher] to make StateFlow emissions immediate.
+ * Uses [MainDispatcherRule] to install [kotlinx.coroutines.test.UnconfinedTestDispatcher] as
+ * [kotlinx.coroutines.Dispatchers.Main] so that [viewModelScope]-backed coroutines run
+ * synchronously without needing to pass a dispatcher into the ViewModel constructor.
  * Turbine's [test] extension collects [LoginViewModel.uiState] synchronously.
  *
- * Every test is expected to FAIL until [LoginViewModel] is implemented.
+ * Tests are expected to FAIL (red) until MOBILE-30 Item-2 migration removes the
+ * [mainDispatcher] constructor parameter from [LoginViewModel] and replaces the manual
+ * [kotlinx.coroutines.CoroutineScope] with [androidx.lifecycle.viewModelScope].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LoginViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     // Fake repository whose sign-in outcome is configured per test.
     private lateinit var fakeRepo: FakeAuthRepository
@@ -41,10 +50,10 @@ class LoginViewModelTest {
     @Before
     fun setUp() {
         fakeRepo = FakeAuthRepository()
-        // ViewModel is constructed with the fakes; no Hilt involved in unit tests.
+        // ViewModel is constructed with no dispatcher param after the MOBILE-30 migration.
         viewModel = LoginViewModel(
             repository = fakeRepo,
-            catalogRepository = FakeCatalogRepository(flagValue = false),
+            catalogRepository = FakeCatalogRepository(flagOn = false),
         )
     }
 
@@ -53,7 +62,7 @@ class LoginViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `idle state on init`() = runTest(UnconfinedTestDispatcher()) {
+    fun `idle state on init`() = runTest {
         viewModel.uiState.test {
             val initial = awaitItem()
             assertEquals(
@@ -70,7 +79,7 @@ class LoginViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `loading then success on sign-in`() = runTest(UnconfinedTestDispatcher()) {
+    fun `loading then success on sign-in`() = runTest {
         fakeRepo.signInResult = Result.success(mockUser)
 
         viewModel.uiState.test {
@@ -98,7 +107,7 @@ class LoginViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `loading then error on sign-in failure`() = runTest(UnconfinedTestDispatcher()) {
+    fun `loading then error on sign-in failure`() = runTest {
         val errorMessage = "network error"
         fakeRepo.signInResult = Result.failure(RuntimeException(errorMessage))
 
@@ -126,7 +135,7 @@ class LoginViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `loading then error on user cancel`() = runTest(UnconfinedTestDispatcher()) {
+    fun `loading then error on user cancel`() = runTest {
         fakeRepo.signInResult = Result.failure(UserCancelledException())
 
         viewModel.uiState.test {
@@ -157,7 +166,7 @@ class LoginViewModelTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun `second sign-in re-enters loading cycle`() = runTest(UnconfinedTestDispatcher()) {
+    fun `second sign-in re-enters loading cycle`() = runTest {
         fakeRepo.signInResult = Result.success(mockUser)
 
         viewModel.uiState.test {
@@ -184,7 +193,7 @@ class LoginViewModelTest {
     // Catalog flag-gating contract (MOBILE-28)
     //
     // LoginViewModel reads CatalogFlags.LOGIN_MOCK via an injected
-    // CatalogRepository and exposes the result as `val isMockLayout: Boolean`.
+    // CatalogRepository and exposes the result as `val isMockLayout: StateFlow<Boolean>`.
     // =========================================================================
 
     // -------------------------------------------------------------------------
@@ -193,7 +202,7 @@ class LoginViewModelTest {
 
     @Test
     fun `isMockLayout is false when catalog flag is off`() {
-        val fakeCatalog = FakeCatalogRepository(flagValue = false)
+        val fakeCatalog = FakeCatalogRepository(flagOn = false)
         val vm = LoginViewModel(
             repository = fakeRepo,
             catalogRepository = fakeCatalog,
@@ -211,7 +220,7 @@ class LoginViewModelTest {
 
     @Test
     fun `isMockLayout is true when catalog flag is on`() {
-        val fakeCatalog = FakeCatalogRepository(flagValue = true)
+        val fakeCatalog = FakeCatalogRepository(flagOn = true)
         val vm = LoginViewModel(
             repository = fakeRepo,
             catalogRepository = fakeCatalog,
@@ -220,6 +229,55 @@ class LoginViewModelTest {
         assertTrue(
             "isMockLayout must be true when ${CatalogFlags.LOGIN_MOCK} is ON",
             vm.isMockLayout.value,
+        )
+    }
+
+    // =========================================================================
+    // Item-4 (MOBILE-30) — FakeCatalogRepository.isEnabled(id, default) contract
+    //
+    // When flagMissing=true the fake must return `default` (not hard-coded false).
+    // This prevents Option-A tests from silently passing with the wrong value.
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 8. FakeCatalogRepository respects default when flag is missing
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `FakeCatalogRepository returns default when flagMissing is true`() {
+        val fakeMissing = FakeCatalogRepository(flagMissing = true)
+
+        assertTrue(
+            "isEnabled(id, default=true) must return true when flagMissing=true",
+            fakeMissing.isEnabled(CatalogFlags.LOGIN_MOCK, default = true),
+        )
+        assertFalse(
+            "isEnabled(id, default=false) must return false when flagMissing=true",
+            fakeMissing.isEnabled(CatalogFlags.LOGIN_MOCK, default = false),
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 9. FakeCatalogRepository.isEnabledFlow respects default when flag is missing
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `FakeCatalogRepository isEnabledFlow returns default when flagMissing is true`() = runTest {
+        val fakeMissing = FakeCatalogRepository(flagMissing = true)
+
+        // isEnabledFlow is now backed by a (never-completing) StateFlow, so take the current value.
+        val trueDefault =
+            fakeMissing.isEnabledFlow(CatalogFlags.LOGIN_MOCK, default = true).first()
+        assertTrue(
+            "isEnabledFlow(id, default=true) must emit true when flagMissing=true, got $trueDefault",
+            trueDefault,
+        )
+
+        val falseDefault =
+            fakeMissing.isEnabledFlow(CatalogFlags.LOGIN_MOCK, default = false).first()
+        assertFalse(
+            "isEnabledFlow(id, default=false) must emit false when flagMissing=true, got $falseDefault",
+            falseDefault,
         )
     }
 }
@@ -253,19 +311,40 @@ private class FakeAuthRepository : AuthRepository {
 /**
  * Manual fake for [CatalogRepository].
  *
- * [flagValue] controls the return value of [isEnabled] for ALL flag ids.
- * Set to true to simulate flag ON, false for flag OFF (the rollback path).
+ * [flagOn] — the explicit value to return when the flag is considered "present".
+ * [flagMissing] — when true, behaves as if the flag is absent from the catalog:
+ *   - [isEnabled] (single-arg) returns false (absent = OFF).
+ *   - [isEnabled] (two-arg) returns [default] (Option-A: absent falls back to caller default).
+ *   - [isEnabledFlow] emits [default] for the same reason.
+ *
+ * This mirrors the contract described in MOBILE-30 Item-4 so that Option-A tests
+ * cannot accidentally pass by always returning false for a missing flag.
  */
-private class FakeCatalogRepository(private val flagValue: Boolean) : CatalogRepository {
+private class FakeCatalogRepository(
+    private val flagOn: Boolean = false,
+    private val flagMissing: Boolean = false,
+) : CatalogRepository {
 
-    override suspend fun refresh() {
-        // no-op for ViewModel tests
-    }
+    override suspend fun refresh() = Unit
 
-    override fun isEnabled(id: Int): Boolean = flagValue
+    override fun isEnabled(id: Int): Boolean = if (flagMissing) false else flagOn
 
-    override fun isEnabled(id: Int, default: Boolean): Boolean = flagValue
+    override fun isEnabled(id: Int, default: Boolean): Boolean =
+        if (flagMissing) default else flagOn
+
+    /**
+     * Backed by a [MutableStateFlow] (not [flowOf]) so it mirrors the real repository's hot
+     * StateFlow: a collector stays subscribed and would observe a later [emitFlag] update.
+     * This keeps the reactive update path (MOBILE-31) testable rather than completing after one emission.
+     */
+    private val flagFlow =
+        kotlinx.coroutines.flow.MutableStateFlow(if (flagMissing) false else flagOn)
 
     override fun isEnabledFlow(id: Int, default: Boolean): kotlinx.coroutines.flow.Flow<Boolean> =
-        kotlinx.coroutines.flow.flowOf(flagValue)
+        if (flagMissing) kotlinx.coroutines.flow.MutableStateFlow(default) else flagFlow
+
+    /** Drive a reactive update to subscribers of [isEnabledFlow] (present-flag case). */
+    fun emitFlag(value: Boolean) {
+        flagFlow.value = value
+    }
 }
