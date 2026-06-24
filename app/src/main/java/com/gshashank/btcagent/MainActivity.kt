@@ -13,6 +13,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.gshashank.btcagent.ui.MainViewModel
 import com.gshashank.btcagent.ui.auth.LoginScreen
 import com.gshashank.btcagent.ui.gate.GateScreen
 import com.gshashank.btcagent.ui.navigation.Route
@@ -41,12 +42,13 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun AppNavHost() {
+private fun AppNavHost(viewModel: MainViewModel = hiltViewModel()) {
     val navController = rememberNavController()
 
     NavHost(
         navController = navController,
-        startDestination = Route.Login,
+        // MOBILE-33: start past Login when a persisted Firebase session exists.
+        startDestination = viewModel.startDestination,
     ) {
         composable<Route.Login> {
             LoginScreen(
