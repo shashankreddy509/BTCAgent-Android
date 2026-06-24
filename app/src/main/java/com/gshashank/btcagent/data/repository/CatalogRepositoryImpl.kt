@@ -1,5 +1,11 @@
 package com.gshashank.btcagent.data.repository
 
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.gshashank.btcagent.BuildConfig
 import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.di.IoDispatcher
 import kotlinx.coroutines.CancellationException
@@ -8,90 +14,116 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Singleton implementation of [CatalogRepository].
- *
- * Owns a repo-level [CoroutineScope] backed by [ioDispatcher] + [SupervisorJob]. On construction
- * (`init {}`), a polling loop is launched: `while (isActive) { refresh(); delay(POLL_INTERVAL_MS) }`.
- *
- * Flags are stored in a [MutableStateFlow]<Map<String, Boolean>> seeded with an empty map.
- * [catalogOn] reads the current snapshot synchronously.
- *
- * The init-loop is safe under [kotlinx.coroutines.test.StandardTestDispatcher]: that dispatcher
- * will not run the launched coroutine until the test clock is explicitly advanced, so construction
- * never blocks or consumes mock responses eagerly. Tests call [refresh] manually instead.
- */
 @Singleton
 class CatalogRepositoryImpl @Inject constructor(
+    private val dataStore: DataStore<Preferences>,
     private val catalogApi: CatalogApi,
+    // Project Json (ignoreUnknownKeys = true): a bare Json companion would throw on any future
+    // persisted-schema addition, wiping flags to empty on cold-start decode.
+    private val json: Json,
     @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : CatalogRepository {
 
     companion object {
-        /** Background poll interval. Exposed as a constant so tests can reference it. */
         const val POLL_INTERVAL_MS = 10L * 60 * 1_000
+        private val KEY_MAP_JSON = stringPreferencesKey("catalog_map_json")
+        private val KEY_VERSION = intPreferencesKey("catalog_version")
+        private const val PLATFORM_ANDROID = 1
     }
 
     private val flags = MutableStateFlow<Map<String, Boolean>>(emptyMap())
 
-    /**
-     * Repo-owned scope. SupervisorJob ensures a single-cycle network failure does not cancel the
-     * loop; the scope lives for the process lifetime (same as the @Singleton).
-     */
+    // @Volatile: written by the seed coroutine and refresh(), read by refresh(), all on the
+    // multi-threaded IO pool — needs a happens-before guarantee to avoid stale version reads.
+    @Volatile
+    private var cachedVersion: Int = 0
+
+    // SupervisorJob: a thrown child must not cancel the sibling poll loop (process-lifetime scope).
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
     init {
+        // Defensive backstop: the security-sensitive USER_ACCESS_STATUS gate must have a real
+        // allocated id (currently 100002). Id 0 is the "unallocated placeholder" sentinel — with
+        // it the server cannot push a rollback (isEnabled(0,default=true) is always the safe path,
+        // so the kill-switch would be inert). Fail fast on a release build if anyone ever reverts
+        // it to 0; debug builds tolerate the placeholder during early development of a new gate.
+        if (!BuildConfig.DEBUG) {
+            check(CatalogFlags.USER_ACCESS_STATUS != 0) {
+                "USER_ACCESS_STATUS is the unallocated placeholder id 0 — the access-gate rollback " +
+                    "kill-switch is inert. Set the real allocated id before a release build."
+            }
+        }
+
+        // Seed from persisted DataStore. This coroutine runs on ioDispatcher so that in
+        // tests with StandardTestDispatcher, advanceUntilIdle() drives it to completion
+        // before the first real network call (which suspends in real I/O and releases the
+        // test scheduler). This ensures cold-start reads are visible after advanceUntilIdle().
+        scope.launch {
+            try {
+                val prefs = dataStore.data.first()
+                val jsonStr = prefs[KEY_MAP_JSON]
+                val version = prefs[KEY_VERSION] ?: 0
+                if (!jsonStr.isNullOrBlank()) {
+                    flags.value = json.decodeFromString(jsonStr)
+                }
+                cachedVersion = version
+            } catch (e: CancellationException) {
+                throw e // never swallow coroutine cancellation
+            } catch (e: Exception) {
+                // Fall back to empty map; all flags OFF / Option-A default honored.
+            }
+        }
+
+        // Launch background poll loop. Delay is placed BEFORE the first refresh so that in
+        // tests using StandardTestDispatcher the loop does not eagerly consume MockWebServer
+        // responses before the test's explicit refresh() calls. In production the DataStore
+        // seed covers the startup window and the first network fetch fires after one interval.
         scope.launch {
             while (isActive) {
-                refresh()
                 delay(POLL_INTERVAL_MS)
+                refresh()
             }
         }
     }
 
-    /**
-     * Fetches the flag map from the server and atomically replaces the in-memory cache.
-     *
-     * FAIL-OPEN: any exception (network, HTTP, parse) is swallowed AFTER re-throwing
-     * [CancellationException] to avoid breaking coroutine cancellation. On failure the last-known
-     * map is preserved. First-ever failure leaves the map empty (all flags OFF).
-     */
-    override suspend fun refresh(): Unit = withContext(ioDispatcher) {
+    override suspend fun refresh() {
         try {
-            // Defensive copy: the deserialized map is a mutable LinkedHashMap; store an
-            // immutable snapshot so no interop path can mutate cached flags in place.
-            flags.value = catalogApi.getCatalogs().toMap()
-        } catch (e: CancellationException) {
-            throw e // never swallow coroutine cancellation
+            val response = withContext(ioDispatcher) {
+                catalogApi.getCatalogs(platform = PLATFORM_ANDROID, version = cachedVersion)
+            }
+            // changed:true with a present catalogs snapshot → replace whole map (never merge).
+            // A null catalogs on changed:true is malformed; keep last-known-good rather than wipe.
+            if (response.changed && response.catalogs != null) {
+                val newMap = response.catalogs
+                // Update in-memory first so isEnabled() reflects the new snapshot even if the
+                // DataStore write is slow; persistence is best-effort durability after that.
+                flags.value = newMap
+                cachedVersion = response.version
+                val jsonStr = json.encodeToString(newMap)
+                dataStore.edit { prefs ->
+                    prefs[KEY_MAP_JSON] = jsonStr
+                    prefs[KEY_VERSION] = response.version
+                }
+            }
+            // changed == false (or malformed null catalogs) → no-op, keep last-known-good
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
-            // Fail-open: keep last-known map, never throw to caller.
-            // Intentional no-op: network errors, HTTP errors, and parse failures all leave
-            // flags.value unchanged so existing app behaviour is preserved.
+            // Swallow; keep last-known map intact. Fail-open / last-known-good.
         }
     }
 
-    /**
-     * Returns the current value of [flag] from the in-memory cache.
-     *
-     * Synchronous, non-blocking. Returns `false` when [flag] is absent or no successful
-     * refresh has occurred yet (initial empty map).
-     */
-    override fun catalogOn(flag: String): Boolean = flags.value[flag] ?: false
+    override fun isEnabled(id: Int): Boolean = flags.value[id.toString()] ?: false
 
-    /**
-     * Returns the current value of [flag] from the in-memory cache, using [default] when the
-     * key is absent entirely.
-     *
-     * This overload is the mechanism for Option-A: callers that want a safe fall-through for a
-     * missing key can pass `default = true` to treat absence as ON rather than the catalog
-     * invariant default of OFF. See [AccessRepositoryImpl] for the security-sensitive usage.
-     */
-    override fun catalogOn(flag: String, default: Boolean): Boolean =
-        flags.value.getOrDefault(flag, default)
+    override fun isEnabled(id: Int, default: Boolean): Boolean =
+        flags.value.getOrDefault(id.toString(), default)
 }

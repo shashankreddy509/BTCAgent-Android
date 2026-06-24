@@ -4,11 +4,14 @@ import android.app.Activity
 import app.cash.turbine.test
 import com.google.firebase.auth.FirebaseUser
 import com.gshashank.btcagent.data.repository.AuthRepository
+import com.gshashank.btcagent.data.repository.CatalogFlags
+import com.gshashank.btcagent.data.repository.CatalogRepository
 import com.gshashank.btcagent.data.repository.UserCancelledException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,8 +41,11 @@ class LoginViewModelTest {
     @Before
     fun setUp() {
         fakeRepo = FakeAuthRepository()
-        // ViewModel is constructed with the fake repo; no Hilt involved in unit tests.
-        viewModel = LoginViewModel(repository = fakeRepo)
+        // ViewModel is constructed with the fakes; no Hilt involved in unit tests.
+        viewModel = LoginViewModel(
+            repository = fakeRepo,
+            catalogRepository = FakeCatalogRepository(flagValue = false),
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -173,10 +179,53 @@ class LoginViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // =========================================================================
+    // Catalog flag-gating contract (MOBILE-28)
+    //
+    // LoginViewModel reads CatalogFlags.LOGIN_MOCK via an injected
+    // CatalogRepository and exposes the result as `val isMockLayout: Boolean`.
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 6. isMockLayout is false when catalog flag is OFF
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `isMockLayout is false when catalog flag is off`() {
+        val fakeCatalog = FakeCatalogRepository(flagValue = false)
+        val vm = LoginViewModel(
+            repository = fakeRepo,
+            catalogRepository = fakeCatalog,
+        )
+
+        assertFalse(
+            "isMockLayout must be false when ${CatalogFlags.LOGIN_MOCK} is OFF",
+            vm.isMockLayout,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. isMockLayout is true when catalog flag is ON
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `isMockLayout is true when catalog flag is on`() {
+        val fakeCatalog = FakeCatalogRepository(flagValue = true)
+        val vm = LoginViewModel(
+            repository = fakeRepo,
+            catalogRepository = fakeCatalog,
+        )
+
+        assertTrue(
+            "isMockLayout must be true when ${CatalogFlags.LOGIN_MOCK} is ON",
+            vm.isMockLayout,
+        )
+    }
 }
 
 // =============================================================================
-// Fake collaborator
+// Fake collaborators
 // =============================================================================
 
 /**
@@ -199,4 +248,21 @@ private class FakeAuthRepository : AuthRepository {
     override fun signOut() {
         // no-op for ViewModel tests
     }
+}
+
+/**
+ * Manual fake for [CatalogRepository].
+ *
+ * [flagValue] controls the return value of [isEnabled] for ALL flag ids.
+ * Set to true to simulate flag ON, false for flag OFF (the rollback path).
+ */
+private class FakeCatalogRepository(private val flagValue: Boolean) : CatalogRepository {
+
+    override suspend fun refresh() {
+        // no-op for ViewModel tests
+    }
+
+    override fun isEnabled(id: Int): Boolean = flagValue
+
+    override fun isEnabled(id: Int, default: Boolean): Boolean = flagValue
 }
