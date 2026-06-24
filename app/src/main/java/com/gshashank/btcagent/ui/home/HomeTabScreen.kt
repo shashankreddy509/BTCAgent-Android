@@ -13,14 +13,17 @@ import androidx.compose.ui.platform.testTag
  * Screen 04 proving the WS + auth pipe; there is no prior production audience to roll back to.
  *
  * The outer [Box] keeps the [testTag("screen_home")] contract that [AppShellTest] depends on.
+ *
+ * @param onPositionsClick Called when the user taps the Open Positions card; wired from
+ *   [AppShell] to navigate to [HomeTab.Positions] — MOBILE-6.
  */
 @Composable
-fun HomeTabScreen() {
+fun HomeTabScreen(onPositionsClick: () -> Unit = {}) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .testTag("screen_home"),
     ) {
-        DashboardScreen()
+        DashboardScreen(onPositionsClick = onPositionsClick)
     }
 }

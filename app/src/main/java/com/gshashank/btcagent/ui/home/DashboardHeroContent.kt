@@ -2,6 +2,7 @@ package com.gshashank.btcagent.ui.home
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,14 +35,18 @@ private val PriceDown = Color(0xFFD50000)
  * Sections:
  *  1. Live Price card with directional color animation and tick arrow.
  *  2. Today's P&L in points.
- *  3. Open Positions summary (count + aggregate unrealised P&L).
+ *  3. Open Positions summary (count + aggregate unrealised P&L). Tapping navigates to MOBILE-6.
  *  4. Bot Status chip (Running/Stopped + LIVE/PAPER badge).
  *
  * Test seam: [testTag("dashboard_price")] on the price headline text.
+ *
+ * @param onPositionsClick Called when the user taps the Open Positions card; navigates to
+ *   the MOBILE-6 positions list screen.
  */
 @Composable
 fun DashboardHeroContent(
     data: DashboardData,
+    onPositionsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -56,10 +61,11 @@ fun DashboardHeroContent(
         // 2. Today's P&L
         TodayPnlRow(pnlPts = data.todayPnlPts)
 
-        // 3. Open Positions card
+        // 3. Open Positions card — tapping navigates to MOBILE-6 positions list
         OpenPositionsCard(
             count = data.openPositionCount,
             unrealisedPnl = data.openUnrealisedPnl,
+            onPositionsClick = onPositionsClick,
         )
 
         // 4. Bot Status chip
@@ -143,9 +149,16 @@ private fun TodayPnlRow(pnlPts: Double) {
 }
 
 @Composable
-private fun OpenPositionsCard(count: Int, unrealisedPnl: Double) {
-    // TODO: MOBILE-6 — tapping this card should navigate to the positions list.
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun OpenPositionsCard(
+    count: Int,
+    unrealisedPnl: Double,
+    onPositionsClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onPositionsClick),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
