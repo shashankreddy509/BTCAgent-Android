@@ -1,32 +1,42 @@
 package com.gshashank.btcagent.ui.markets
 
+import app.cash.turbine.test
+import com.gshashank.btcagent.data.repository.CatalogFlags
+import com.gshashank.btcagent.data.repository.CatalogRepository
 import com.gshashank.btcagent.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
 /**
- * JVM unit tests for [MarketsHubViewModel] — MOBILE-10.
+ * JVM unit tests for [MarketsHubViewModel] — MOBILE-13 (catalog gating) + MOBILE-10 (hub).
  *
- * [MarketsHubViewModel] has an `@Inject constructor()` with no dependencies, so it is
- * constructed directly in tests — no Hilt, no fake collaborators needed.
+ * This suite extends the original MOBILE-10 stub tests to add MOBILE-13 catalog gating:
+ * the Markov Matrix tile/screen must only be accessible when [CatalogFlags.MARKOV_MATRIX]
+ * (id = 100003) is ON.
  *
+ * Uses [FakeCatalogRepository] (hand-written fake) so no DataStore or Firestore is touched.
  * [MainDispatcherRule] installs [kotlinx.coroutines.test.UnconfinedTestDispatcher] as
- * [kotlinx.coroutines.Dispatchers.Main] so that any [viewModelScope]-backed coroutines run
- * synchronously in the test thread.
+ * [kotlinx.coroutines.Dispatchers.Main] so [viewModelScope]-backed coroutines are driven
+ * synchronously.
  *
- * All tests are expected to FAIL (red) until [MarketsHubViewModel] is implemented.
- * No catalog flag is involved in this story (MOBILE-10 explicitly opted out of a flag).
+ * **Catalog rollback contract (MOBILE-13)**:
+ *   - [CatalogFlags.MARKOV_MATRIX] OFF/absent → [MarketsHubViewModel.isMarkovEnabled] emits `false`
+ *     (tile hidden — old/absent behavior).
+ *   - [CatalogFlags.MARKOV_MATRIX] ON → [MarketsHubViewModel.isMarkovEnabled] emits `true`
+ *     (tile shown — new behavior).
  *
- * Test coverage:
- *   1. ViewModel constructs without error.
- *   2. `uiState` is non-null immediately after construction.
- *   3. `uiState.value` equals the expected initial stub state (MarketsHubUiState.Stub or
- *      equivalent data object / Unit-emitting flow — whatever the implementation exposes).
- *   4. `uiState` continues to hold a non-null, stable value after coroutines are drained.
+ * All tests that reference [MarketsHubViewModel.isMarkovEnabled] MUST fail (red) until
+ * [MarketsHubViewModel] is updated to accept [CatalogRepository] and expose [isMarkovEnabled].
+ * The original 4 MOBILE-10 tests must also fail until the ViewModel re-adopts [CatalogRepository].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MarketsHubViewModelTest {
@@ -34,15 +44,23 @@ class MarketsHubViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    // -------------------------------------------------------------------------
-    // 1. ViewModel constructs without error
-    // -------------------------------------------------------------------------
+    private lateinit var fakeCatalog: FakeCatalogRepository
+
+    @Before
+    fun setUp() {
+        fakeCatalog = FakeCatalogRepository()
+    }
+
+    private fun createViewModel(): MarketsHubViewModel =
+        MarketsHubViewModel(catalogRepository = fakeCatalog)
+
+    // =========================================================================
+    // MOBILE-10 baseline: ViewModel constructs without error
+    // =========================================================================
 
     @Test
     fun `MarketsHubViewModel constructs without error`() {
-        // If MarketsHubViewModel does not exist or fails to instantiate, this test fails with
-        // a compile error or a runtime exception — either satisfies the "red" requirement.
-        val viewModel = MarketsHubViewModel()
+        val viewModel = createViewModel()
 
         assertNotNull(
             "MarketsHubViewModel instance must be non-null after construction",
@@ -50,13 +68,13 @@ class MarketsHubViewModelTest {
         )
     }
 
-    // -------------------------------------------------------------------------
-    // 2. uiState is non-null immediately after construction
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // MOBILE-10 baseline: uiState is non-null immediately after construction
+    // =========================================================================
 
     @Test
     fun `uiState is non-null immediately after construction`() {
-        val viewModel = MarketsHubViewModel()
+        val viewModel = createViewModel()
 
         assertNotNull(
             "uiState StateFlow must be non-null immediately after construction",
@@ -64,40 +82,33 @@ class MarketsHubViewModelTest {
         )
     }
 
-    // -------------------------------------------------------------------------
-    // 3. uiState.value is the initial stub state at construction time
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // MOBILE-10 baseline: uiState.value equals Stub at construction time
+    // =========================================================================
 
     @Test
     fun `uiState value equals Stub at construction time`() {
-        val viewModel = MarketsHubViewModel()
+        val viewModel = createViewModel()
 
-        // The ViewModel exposes MarketsHubUiState.Stub as its initial value.
-        // This assertion will fail to compile until MarketsHubUiState exists with a Stub variant,
-        // and will fail at runtime until the ViewModel sets that as the initial value.
         val initialState = viewModel.uiState.value
 
         assertNotNull(
             "uiState.value must not be null immediately after construction",
             initialState,
         )
-
-        // Pin the exact initial type: must be MarketsHubUiState.Stub (the sentinel value
-        // declared for this story — a no-data placeholder the hub can render before MOBILE-24).
         assert(initialState is MarketsHubUiState.Stub) {
             "Expected initial uiState to be MarketsHubUiState.Stub but was $initialState"
         }
     }
 
-    // -------------------------------------------------------------------------
-    // 4. uiState remains Stub after coroutines are drained (no background mutation)
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // MOBILE-10 baseline: uiState remains Stub after coroutines are drained
+    // =========================================================================
 
     @Test
     fun `uiState remains Stub after coroutines are drained`() = runTest {
-        val viewModel = MarketsHubViewModel()
+        val viewModel = createViewModel()
 
-        // Allow any init{} coroutines to complete.
         advanceUntilIdle()
 
         val stateAfterDrain = viewModel.uiState.value
@@ -106,10 +117,165 @@ class MarketsHubViewModelTest {
             "uiState.value must still be non-null after advanceUntilIdle()",
             stateAfterDrain,
         )
-
         assert(stateAfterDrain is MarketsHubUiState.Stub) {
-            "uiState must remain MarketsHubUiState.Stub after all coroutines finish — " +
-                "no background state mutation is expected for the stub ViewModel, got $stateAfterDrain"
+            "uiState must remain MarketsHubUiState.Stub after all coroutines finish, got $stateAfterDrain"
         }
+    }
+
+    // =========================================================================
+    // MOBILE-13 Catalog gating: isMarkovEnabled emits false when flag is OFF/absent
+    //
+    // Rollback contract: when MARKOV_MATRIX flag is OFF the Markov Matrix tile must be
+    // hidden — this is the OLD/absent behavior (feature not shown).
+    // =========================================================================
+
+    @Test
+    fun `isMarkovEnabled emits false when MARKOV_MATRIX catalog flag is OFF`() = runTest {
+        // Flag OFF — isEnabledFlow returns false, which is the default absent behavior.
+        fakeCatalog.markovMatrixEnabled = false
+
+        val viewModel = createViewModel()
+
+        viewModel.isMarkovEnabled.test {
+            advanceUntilIdle()
+
+            // Drain until we get at least one emission.
+            val emission = awaitItem()
+            assertFalse(
+                "isMarkovEnabled must emit false when CatalogFlags.MARKOV_MATRIX (id=100003) is OFF — " +
+                    "Markov Matrix tile must not be accessible in the hub",
+                emission,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // =========================================================================
+    // MOBILE-13 Catalog gating: isMarkovEnabled emits true when flag is ON
+    //
+    // Rollback contract: when MARKOV_MATRIX flag is ON the Markov Matrix tile must be
+    // visible — this is the NEW behavior (feature shown).
+    // =========================================================================
+
+    @Test
+    fun `isMarkovEnabled emits true when MARKOV_MATRIX catalog flag is ON`() = runTest {
+        // Flag ON — the new Markov Matrix screen is accessible.
+        fakeCatalog.markovMatrixEnabled = true
+
+        val viewModel = createViewModel()
+
+        viewModel.isMarkovEnabled.test {
+            advanceUntilIdle()
+
+            val emission = awaitItem()
+            assertTrue(
+                "isMarkovEnabled must emit true when CatalogFlags.MARKOV_MATRIX (id=100003) is ON — " +
+                    "Markov Matrix tile must be accessible in the hub",
+                emission,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // =========================================================================
+    // MOBILE-13 Catalog gating: isMarkovEnabled is false when flag is absent (default)
+    //
+    // The CatalogFlags.MARKOV_MATRIX flag is NOT security-sensitive (default=false), so
+    // a missing/failed fetch must fall back to the OFF path (tile hidden).
+    // =========================================================================
+
+    @Test
+    fun `isMarkovEnabled emits false by default when MARKOV_MATRIX flag is absent from catalog`() =
+        runTest {
+            // Do NOT set markovMatrixEnabled — this is the "absent" state with default=false.
+            fakeCatalog.markovMatrixEnabled = false // explicit OFF same as absent
+
+            val viewModel = createViewModel()
+
+            viewModel.isMarkovEnabled.test {
+                advanceUntilIdle()
+
+                val emission = awaitItem()
+                assertFalse(
+                    "isMarkovEnabled must default to false when MARKOV_MATRIX flag is absent — " +
+                        "the tile must be hidden until the flag is explicitly enabled",
+                    emission,
+                )
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // =========================================================================
+    // MOBILE-13 Catalog gating: flag toggling — OFF then ON emits both values in order
+    //
+    // Tests that the StateFlow reacts to a live catalog update (e.g. startup fetch lands).
+    // =========================================================================
+
+    @Test
+    fun `isMarkovEnabled reacts to catalog flag toggling from OFF to ON`() = runTest {
+        fakeCatalog.markovMatrixEnabled = false
+
+        // Use a flow that emits two values to simulate a late-landing catalog fetch.
+        fakeCatalog.markovMatrixFlow = flowOf(false, true)
+
+        val viewModel = createViewModel()
+
+        viewModel.isMarkovEnabled.test {
+            advanceUntilIdle()
+
+            val first = awaitItem()
+            assertFalse("First emission must be false (flag OFF at startup)", first)
+
+            val second = awaitItem()
+            assertTrue(
+                "Second emission must be true after catalog fetch lands with flag ON",
+                second,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+}
+
+// =============================================================================
+// Fake collaborators
+// =============================================================================
+
+/**
+ * Hand-written fake [CatalogRepository].
+ *
+ * [markovMatrixEnabled] controls the sync [isEnabled] response for [CatalogFlags.MARKOV_MATRIX].
+ * [markovMatrixFlow] controls the [isEnabledFlow] response; defaults to [flowOf(markovMatrixEnabled)].
+ * All other flags default to `false`.
+ */
+private class FakeCatalogRepository : CatalogRepository {
+
+    var markovMatrixEnabled: Boolean = false
+
+    /** Override this to supply a multi-emission flow (e.g. for the toggling test). */
+    var markovMatrixFlow: Flow<Boolean>? = null
+
+    override suspend fun refresh() {
+        // No-op in tests — tests configure the result directly.
+    }
+
+    override fun isEnabledFlow(id: Int, default: Boolean): Flow<Boolean> {
+        if (id == CatalogFlags.MARKOV_MATRIX) {
+            return markovMatrixFlow ?: flowOf(markovMatrixEnabled)
+        }
+        return flowOf(default)
+    }
+
+    override fun isEnabled(id: Int): Boolean {
+        if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
+        return false
+    }
+
+    override fun isEnabled(id: Int, default: Boolean): Boolean {
+        if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
+        return default
     }
 }

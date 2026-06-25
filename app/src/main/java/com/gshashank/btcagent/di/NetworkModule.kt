@@ -5,6 +5,7 @@ import com.gshashank.btcagent.data.network.AccessApi
 import com.gshashank.btcagent.data.network.BriefingApi
 import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.DashboardApi
+import com.gshashank.btcagent.data.network.MarkovApi
 import com.gshashank.btcagent.data.network.OpenInterestApi
 import com.gshashank.btcagent.data.network.PositionsApi
 import com.gshashank.btcagent.data.network.PriceWebSocketClient
@@ -157,6 +158,11 @@ object NetworkModule {
     @Singleton
     fun provideOpenInterestApi(retrofit: Retrofit): OpenInterestApi =
         retrofit.create(OpenInterestApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideMarkovApi(retrofit: Retrofit): MarkovApi =
+        retrofit.create(MarkovApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.
