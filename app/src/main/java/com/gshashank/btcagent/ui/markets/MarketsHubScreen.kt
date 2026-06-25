@@ -104,6 +104,22 @@ fun MarketsHubScreen(
                     onClick = { onTileClick(MarketsRoute.Analytics) },
                 )
             }
+            item {
+                AnalyticsTile(
+                    icon = "☀️",
+                    label = "Morning Briefing",
+                    testTag = "tile_morning_briefing",
+                    onClick = { onTileClick(MarketsRoute.MorningBriefing) },
+                )
+            }
+            item {
+                AnalyticsTile(
+                    icon = "🔍",
+                    label = "Scanner",
+                    testTag = "tile_scanner",
+                    onClick = { onTileClick(MarketsRoute.Scanner) },
+                )
+            }
         }
     }
 }

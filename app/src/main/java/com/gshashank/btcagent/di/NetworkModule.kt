@@ -2,6 +2,7 @@ package com.gshashank.btcagent.di
 
 import com.gshashank.btcagent.BuildConfig
 import com.gshashank.btcagent.data.network.AccessApi
+import com.gshashank.btcagent.data.network.BriefingApi
 import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.DashboardApi
 import com.gshashank.btcagent.data.network.PositionsApi
@@ -139,6 +140,11 @@ object NetworkModule {
     @Singleton
     fun provideScannerApi(retrofit: Retrofit): ScannerApi =
         retrofit.create(ScannerApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideBriefingApi(retrofit: Retrofit): BriefingApi =
+        retrofit.create(BriefingApi::class.java)
 
     /**
      * Provides [PriceWebSocketClient] with the production WS URL.
