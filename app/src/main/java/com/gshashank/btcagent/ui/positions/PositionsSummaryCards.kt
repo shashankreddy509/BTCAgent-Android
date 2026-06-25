@@ -10,13 +10,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
-private val PriceUp = Color(0xFF00C853)
-private val PriceDown = Color(0xFFD50000)
+import com.gshashank.btcagent.ui.theme.BtcPriceDown
+import com.gshashank.btcagent.ui.theme.BtcPriceUp
 
 /**
  * Two summary cards shown at the top of the Positions list — MOBILE-6.
@@ -54,7 +52,7 @@ fun PositionsSummaryCards(
                 Text(
                     text = "$sign${"%.2f".format(unrealizedTotal)}",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = if (unrealizedTotal >= 0.0) PriceUp else PriceDown,
+                    color = if (unrealizedTotal >= 0.0) BtcPriceUp else BtcPriceDown,
                 )
             }
         }

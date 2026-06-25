@@ -6,6 +6,7 @@ import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.DashboardApi
 import com.gshashank.btcagent.data.network.PositionsApi
 import com.gshashank.btcagent.data.network.PriceWebSocketClient
+import com.gshashank.btcagent.data.network.ReportsApi
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import com.gshashank.btcagent.data.network.AuthInterceptor
 import dagger.Module
@@ -44,8 +45,12 @@ object NetworkModule {
         tokenAuthenticator: TokenAuthenticator,
     ): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
+            // HEADERS (not BODY) on the AUTHENTICATED client: response bodies carry trading P&L /
+            // position history (e.g. /api/trading/reports). At BODY that financial data lands in
+            // Logcat, readable by any app with READ_LOGS. Headers-only keeps debugging useful
+            // without leaking the payload. (The public client may log BODY — no user data.)
             level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
+                HttpLoggingInterceptor.Level.HEADERS
             } else {
                 HttpLoggingInterceptor.Level.NONE
             }
@@ -123,6 +128,11 @@ object NetworkModule {
     @Singleton
     fun providePositionsApi(retrofit: Retrofit): PositionsApi =
         retrofit.create(PositionsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideReportsApi(retrofit: Retrofit): ReportsApi =
+        retrofit.create(ReportsApi::class.java)
 
     /**
      * Provides [PriceWebSocketClient] with the production WS URL.

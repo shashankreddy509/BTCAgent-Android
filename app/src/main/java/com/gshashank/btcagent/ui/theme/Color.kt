@@ -8,6 +8,10 @@ val BtcAccentDark = Color(0xFFC8740D)
 val BtcUp = Color(0xFF22C55E)
 val BtcDown = Color(0xFFEF4444)
 
+// Price direction tokens (exact hex per MOBILE-7 spec).
+val BtcPriceUp = Color(0xFF00C853)
+val BtcPriceDown = Color(0xFFD50000)
+
 // Dark surface palette (dark-first default).
 val BtcBg = Color(0xFF0E0E12)
 val BtcBg2 = Color(0xFF16161B)

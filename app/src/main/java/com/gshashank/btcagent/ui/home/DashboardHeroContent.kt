@@ -18,16 +18,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gshashank.btcagent.data.model.BotMode
 import com.gshashank.btcagent.data.model.DashboardData
 import com.gshashank.btcagent.data.model.PriceDirection
-
-private val PriceUp = Color(0xFF00C853)
-private val PriceDown = Color(0xFFD50000)
+import com.gshashank.btcagent.ui.theme.BtcPriceDown
+import com.gshashank.btcagent.ui.theme.BtcPriceUp
 
 /**
  * Hero layout showing live BTC price, today's P&L, open positions, and bot status.
@@ -76,8 +74,8 @@ fun DashboardHeroContent(
 @Composable
 private fun LivePriceCard(price: Double, direction: PriceDirection) {
     val targetColor = when (direction) {
-        PriceDirection.Up -> PriceUp
-        PriceDirection.Down -> PriceDown
+        PriceDirection.Up -> BtcPriceUp
+        PriceDirection.Down -> BtcPriceDown
         PriceDirection.Flat -> null // fallback to onSurface
     }
     val surfaceColor = MaterialTheme.colorScheme.onSurface
@@ -129,7 +127,7 @@ private fun LivePriceCard(price: Double, direction: PriceDirection) {
 @Composable
 private fun TodayPnlRow(pnlPts: Double) {
     val isPositive = pnlPts >= 0.0
-    val pnlColor = if (isPositive) PriceUp else PriceDown
+    val pnlColor = if (isPositive) BtcPriceUp else BtcPriceDown
     val sign = if (isPositive) "+" else ""
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -181,7 +179,7 @@ private fun OpenPositionsCard(
             Text(
                 text = "$sign${"%.2f".format(unrealisedPnl)}",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = if (unrealisedPnl >= 0.0) PriceUp else PriceDown,
+                color = if (unrealisedPnl >= 0.0) BtcPriceUp else BtcPriceDown,
             )
         }
     }
@@ -200,7 +198,7 @@ private fun BotStatusRow(running: Boolean, mode: BotMode) {
         )
         Surface(
             shape = MaterialTheme.shapes.small,
-            color = if (mode == BotMode.Live) PriceDown else MaterialTheme.colorScheme.surfaceVariant,
+            color = if (mode == BotMode.Live) BtcPriceDown else MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Text(
                 text = if (mode == BotMode.Live) "LIVE" else "PAPER",
