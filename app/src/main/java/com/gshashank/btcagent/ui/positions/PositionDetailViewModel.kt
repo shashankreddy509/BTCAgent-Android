@@ -8,6 +8,7 @@ import com.gshashank.btcagent.data.repository.AccessResult
 import com.gshashank.btcagent.data.repository.ActionResult
 import com.gshashank.btcagent.data.repository.PositionsRepository
 import com.gshashank.btcagent.data.repository.PositionsResult
+import com.gshashank.btcagent.ui.components.state.ActionResultUiState
 import com.gshashank.btcagent.ui.components.state.UiState
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -19,14 +20,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
-/**
- * Result of a position action (close or edit TP/SL) exposed to the UI layer — MOBILE-6.
- */
-sealed class ActionResultUiState {
-    data object Success : ActionResultUiState()
-    data class Error(val code: Int, val message: String) : ActionResultUiState()
-}
 
 /**
  * ViewModel for the Position Detail screen — MOBILE-6.

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gshashank.btcagent.data.model.Position
+import com.gshashank.btcagent.ui.components.state.ActionResultUiState
 import com.gshashank.btcagent.ui.components.state.UiState
 
 private val PriceUp = Color(0xFF00C853)

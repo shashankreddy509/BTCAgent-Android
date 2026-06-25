@@ -32,6 +32,7 @@ import com.gshashank.btcagent.ui.navigation.TradeTab
 import com.gshashank.btcagent.ui.positions.PositionDetailScreen
 import com.gshashank.btcagent.ui.positions.PositionsListScreen
 import com.gshashank.btcagent.ui.reports.ReportsScreen
+import com.gshashank.btcagent.ui.scanner.ScannerScreen
 import com.gshashank.btcagent.ui.settings.SettingsScreen
 import com.gshashank.btcagent.ui.trade.TradeScreen
 
@@ -75,6 +76,9 @@ fun AppShell() {
                         onPositionsClick = {
                             navController.navigate(HomeTab.Positions)
                         },
+                        onScannerClick = {
+                            navController.navigate(HomeTab.Scanner)
+                        },
                     )
                 }
                 composable<HomeTab.Positions> {
@@ -90,6 +94,9 @@ fun AppShell() {
                         signalId = route.signalId,
                         onBack = { navController.popBackStack() },
                     )
+                }
+                composable<HomeTab.Scanner> {
+                    ScannerScreen(onBack = { navController.popBackStack() })
                 }
             }
             navigation<TabGraph.Markets>(startDestination = MarketsRoute.Hub::class) {
