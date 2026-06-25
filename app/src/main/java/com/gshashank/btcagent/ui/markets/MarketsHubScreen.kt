@@ -15,25 +15,32 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gshashank.btcagent.ui.navigation.MarketsRoute
 
 /**
  * Markets hub: regime banner + 2-col grid of analytics tiles.
  *
  * Stateless re: navigation — takes an [onTileClick] callback instead of a NavController so the
- * screen stays decoupled from the nav graph and is straightforward to preview/test. A
- * MarketsHubViewModel slot is intentionally omitted until MOBILE-24 wires real regime data; add
- * it back (and observe its uiState) at that point rather than carrying a dead parameter now.
+ * screen stays decoupled from the nav graph and is straightforward to preview/test.
+ *
+ * The Markov Matrix tile is gated behind [CatalogFlags.MARKOV_MATRIX] via [MarketsHubViewModel].
+ * All other tiles are rendered unconditionally.
  */
 @Composable
 fun MarketsHubScreen(
     onTileClick: (MarketsRoute) -> Unit,
+    viewModel: MarketsHubViewModel = hiltViewModel(),
 ) {
+    val isMarkovEnabled by viewModel.isMarkovEnabled.collectAsStateWithLifecycle()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -64,13 +71,15 @@ fun MarketsHubScreen(
                     onClick = { onTileClick(MarketsRoute.BtcRegime) },
                 )
             }
-            item {
-                AnalyticsTile(
-                    icon = "🔢",
-                    label = "Markov Matrix",
-                    testTag = "tile_markov_matrix",
-                    onClick = { onTileClick(MarketsRoute.MarkovMatrix) },
-                )
+            if (isMarkovEnabled) {
+                item {
+                    AnalyticsTile(
+                        icon = "🔢",
+                        label = "Markov Matrix",
+                        testTag = "tile_markov_matrix",
+                        onClick = { onTileClick(MarketsRoute.MarkovMatrix) },
+                    )
+                }
             }
             item {
                 AnalyticsTile(

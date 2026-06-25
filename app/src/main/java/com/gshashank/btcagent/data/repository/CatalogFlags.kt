@@ -20,4 +20,10 @@ object CatalogFlags {
      * the SAFE body-based path. An explicit server-side `false` triggers the legacy rollback path.
      */
     const val USER_ACCESS_STATUS = 100002
+
+    /** markov_matrix — android 100003 / iOS 200003.
+     *  ON  = Markets hub Markov Matrix tile + screen visible.
+     *  OFF/absent = tile hidden (default=false at isEnabledFlow call site; not security-sensitive).
+     *  Allocated via BTCWEB-22; live catalog v5, seq 3. */
+    const val MARKOV_MATRIX = 100003
 }
