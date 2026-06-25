@@ -2,6 +2,7 @@
 package com.gshashank.btcagent.ui.shell
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -391,5 +392,171 @@ class AppShellTest {
                 .onNodeWithTag(tag)
                 .assertIsDisplayed()
         }
+    }
+
+    // =========================================================================
+    // MOBILE-34 — Start destination must be Home, not Markets
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 16. Cold launch: the Home hub (screen_home) is shown without any user interaction.
+    //     Fails pre-fix because NavHost startDestination = TabGraph.Markets shows
+    //     screen_markets instead.
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun cold_launch_shows_home_tab_not_markets() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                AppShell()
+            }
+        }
+
+        // No taps — verify the initial destination is the Home hub.
+        composeTestRule
+            .onNodeWithTag("screen_home")
+            .assertIsDisplayed()
+    }
+
+    // -------------------------------------------------------------------------
+    // 17. Cold launch: the Markets screen is NOT shown without any user interaction.
+    //     Fails pre-fix because startDestination = TabGraph.Markets shows screen_markets.
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun cold_launch_does_not_show_markets_screen() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                AppShell()
+            }
+        }
+
+        // No taps — the Markets hub must NOT be the active screen on startup.
+        composeTestRule
+            .onNodeWithTag("screen_markets")
+            .assertIsNotDisplayed()
+    }
+
+    // =========================================================================
+    // MOBILE-35 — Re-selecting the active tab must pop its nested back stack to the tab root.
+    //
+    // These tests use the Markets tab (detail screens are Hilt-free stubs) to exercise
+    // the same onTabSelected branch that fixes all tabs including Home.
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 18. Re-selecting the Markets tab while a detail stub is on the Markets back stack
+    //     pops back to the Markets hub.
+    //     Fails pre-fix because onTabSelected always uses restoreState=true, so re-selecting
+    //     the active tab restores the saved nested stack (detail on top) instead of popping
+    //     to the hub.
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun reselecting_active_markets_tab_pops_detail_to_markets_hub() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                AppShell()
+            }
+        }
+
+        // Navigate to Markets and push a detail stub onto the Markets back stack.
+        composeTestRule.onNodeWithTag("tab_markets").performClick()
+        composeTestRule.onNodeWithTag("tile_open_interest").performClick()
+
+        // Confirm the detail stub is showing.
+        composeTestRule
+            .onNodeWithText("Open Interest — coming soon")
+            .assertIsDisplayed()
+
+        // Re-select the already-active Markets tab — must pop to the Markets hub.
+        composeTestRule.onNodeWithTag("tab_markets").performClick()
+
+        // The Markets hub must now be visible (not the detail stub).
+        composeTestRule
+            .onNodeWithTag("screen_markets")
+            .assertIsDisplayed()
+
+        // The detail stub must no longer be on screen.
+        composeTestRule
+            .onNodeWithText("Open Interest — coming soon")
+            .assertIsNotDisplayed()
+    }
+
+    // -------------------------------------------------------------------------
+    // 19. After reselecting the Markets tab to pop to hub, switching away and back
+    //     still shows the hub (no stale detail is saved in the back stack).
+    //     Verifies that the pop-to-root fix does not corrupt the save/restore mechanism
+    //     for subsequent cross-tab switches.
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun after_reselect_pop_switching_tabs_does_not_restore_stale_detail() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                AppShell()
+            }
+        }
+
+        // Navigate to Markets and push a detail stub.
+        composeTestRule.onNodeWithTag("tab_markets").performClick()
+        composeTestRule.onNodeWithTag("tile_btc_regime").performClick()
+
+        composeTestRule
+            .onNodeWithText("BTC Regime — coming soon")
+            .assertIsDisplayed()
+
+        // Reselect Markets tab — pops to hub.
+        composeTestRule.onNodeWithTag("tab_markets").performClick()
+        composeTestRule
+            .onNodeWithTag("screen_markets")
+            .assertIsDisplayed()
+
+        // Switch to Trade then back to Markets — hub must still be shown.
+        composeTestRule.onNodeWithTag("tab_trade").performClick()
+        composeTestRule.onNodeWithTag("tab_markets").performClick()
+
+        composeTestRule
+            .onNodeWithTag("screen_markets")
+            .assertIsDisplayed()
+
+        composeTestRule
+            .onNodeWithText("BTC Regime — coming soon")
+            .assertIsNotDisplayed()
+    }
+
+    // -------------------------------------------------------------------------
+    // 20. Switching between DIFFERENT tabs still preserves each tab's back stack
+    //     (regression guard — the MOBILE-35 fix must not break cross-tab save/restore).
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun different_tab_switch_still_preserves_back_stacks() {
+        composeTestRule.setContent {
+            BTCAgentTheme {
+                AppShell()
+            }
+        }
+
+        // Push a detail onto the Markets stack.
+        composeTestRule.onNodeWithTag("tab_markets").performClick()
+        composeTestRule.onNodeWithTag("tile_volume_profile").performClick()
+
+        composeTestRule
+            .onNodeWithText("Volume Profile — coming soon")
+            .assertIsDisplayed()
+
+        // Switch away to Trade (a different tab) — Markets state should be saved.
+        composeTestRule.onNodeWithTag("tab_trade").performClick()
+        composeTestRule
+            .onNodeWithTag("screen_trade")
+            .assertIsDisplayed()
+
+        // Return to Markets via a DIFFERENT-tab switch — detail must still be restored.
+        composeTestRule.onNodeWithTag("tab_markets").performClick()
+
+        composeTestRule
+            .onNodeWithText("Volume Profile — coming soon")
+            .assertIsDisplayed()
     }
 }
