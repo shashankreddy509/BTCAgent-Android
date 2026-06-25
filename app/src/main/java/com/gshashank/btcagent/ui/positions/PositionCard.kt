@@ -12,15 +12,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.gshashank.btcagent.data.model.Position
 import com.gshashank.btcagent.data.model.Side
-
-private val PriceUp = Color(0xFF00C853)
-private val PriceDown = Color(0xFFD50000)
+import com.gshashank.btcagent.ui.theme.BtcPriceDown
+import com.gshashank.btcagent.ui.theme.BtcPriceUp
 
 /**
  * Card displaying a single open position's key details — MOBILE-6.
@@ -59,8 +57,8 @@ fun PositionCard(
                     Side.Short -> "Short"
                 }
                 val sideColor = when (position.side) {
-                    Side.Long -> PriceUp
-                    Side.Short -> PriceDown
+                    Side.Long -> BtcPriceUp
+                    Side.Short -> BtcPriceDown
                 }
                 Text(
                     text = sideText,
@@ -69,7 +67,7 @@ fun PositionCard(
                 )
             }
 
-            val pnlColor = if (position.pnl >= 0.0) PriceUp else PriceDown
+            val pnlColor = if (position.pnl >= 0.0) BtcPriceUp else BtcPriceDown
             val pnlSign = if (position.pnl >= 0.0) "+" else ""
             Text(
                 text = "$pnlSign${"%.2f".format(position.pnl)} ($pnlSign${"%.2f".format(position.pnlPct)}%)",
