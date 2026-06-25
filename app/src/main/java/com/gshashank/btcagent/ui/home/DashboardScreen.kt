@@ -16,10 +16,13 @@ import com.gshashank.btcagent.ui.components.state.UiState
  *
  * @param onPositionsClick Called when the user taps the Open Positions card to navigate to
  *   the MOBILE-6 positions list (wired from the host NavGraph in [AppShell]).
+ * @param onScannerClick Called when the user taps the Scanner card to navigate to
+ *   the MOBILE-8 scanner screen (wired from the host NavGraph in [AppShell]).
  */
 @Composable
 fun DashboardScreen(
     onPositionsClick: () -> Unit = {},
+    onScannerClick: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -27,6 +30,7 @@ fun DashboardScreen(
         uiState = uiState,
         onRetry = viewModel::retry,
         onPositionsClick = onPositionsClick,
+        onScannerClick = onScannerClick,
     )
 }
 
@@ -44,6 +48,7 @@ fun DashboardScreenContent(
     uiState: UiState<DashboardData>,
     onRetry: () -> Unit,
     onPositionsClick: () -> Unit = {},
+    onScannerClick: () -> Unit = {},
 ) {
     DataStateScaffold(
         uiState = uiState,
@@ -52,6 +57,7 @@ fun DashboardScreenContent(
             DashboardHeroContent(
                 data = data,
                 onPositionsClick = onPositionsClick,
+                onScannerClick = onScannerClick,
             )
         },
         onRetry = onRetry,

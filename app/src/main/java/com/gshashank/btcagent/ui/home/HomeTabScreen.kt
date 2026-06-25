@@ -16,14 +16,22 @@ import androidx.compose.ui.platform.testTag
  *
  * @param onPositionsClick Called when the user taps the Open Positions card; wired from
  *   [AppShell] to navigate to [HomeTab.Positions] — MOBILE-6.
+ * @param onScannerClick Called when the user taps the Scanner card; wired from
+ *   [AppShell] to navigate to [HomeTab.Scanner] — MOBILE-8.
  */
 @Composable
-fun HomeTabScreen(onPositionsClick: () -> Unit = {}) {
+fun HomeTabScreen(
+    onPositionsClick: () -> Unit = {},
+    onScannerClick: () -> Unit = {},
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .testTag("screen_home"),
     ) {
-        DashboardScreen(onPositionsClick = onPositionsClick)
+        DashboardScreen(
+            onPositionsClick = onPositionsClick,
+            onScannerClick = onScannerClick,
+        )
     }
 }

@@ -14,6 +14,8 @@ import com.gshashank.btcagent.data.repository.PositionsRepository
 import com.gshashank.btcagent.data.repository.PositionsRepositoryImpl
 import com.gshashank.btcagent.data.repository.ReportsRepository
 import com.gshashank.btcagent.data.repository.ReportsRepositoryImpl
+import com.gshashank.btcagent.data.repository.ScannerRepository
+import com.gshashank.btcagent.data.repository.ScannerRepositoryImpl
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -58,4 +60,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindReportsRepository(impl: ReportsRepositoryImpl): ReportsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindScannerRepository(impl: ScannerRepositoryImpl): ScannerRepository
 }

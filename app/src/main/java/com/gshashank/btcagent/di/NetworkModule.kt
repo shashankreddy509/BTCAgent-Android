@@ -7,6 +7,7 @@ import com.gshashank.btcagent.data.network.DashboardApi
 import com.gshashank.btcagent.data.network.PositionsApi
 import com.gshashank.btcagent.data.network.PriceWebSocketClient
 import com.gshashank.btcagent.data.network.ReportsApi
+import com.gshashank.btcagent.data.network.ScannerApi
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import com.gshashank.btcagent.data.network.AuthInterceptor
 import dagger.Module
@@ -133,6 +134,11 @@ object NetworkModule {
     @Singleton
     fun provideReportsApi(retrofit: Retrofit): ReportsApi =
         retrofit.create(ReportsApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideScannerApi(retrofit: Retrofit): ScannerApi =
+        retrofit.create(ScannerApi::class.java)
 
     /**
      * Provides [PriceWebSocketClient] with the production WS URL.
