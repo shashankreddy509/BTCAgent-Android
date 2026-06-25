@@ -54,11 +54,24 @@ fun AppShell() {
             BtcNavigationBar(
                 currentTab = currentTab,
                 onTabSelected = { tab ->
-                    navController.navigate(tab) {
-                        launchSingleTop = true
-                        restoreState = true
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+                    if (tab == currentTab) {
+                        // MOBILE-35: Re-selecting the active tab pops its nested back stack
+                        // to the tab's start (hub) destination, clearing any detail screens.
+                        val tabStartRoute: Any = when (tab) {
+                            TabGraph.Home -> HomeTab.Hub
+                            TabGraph.Markets -> MarketsRoute.Hub
+                            TabGraph.Trade -> TradeTab.Hub
+                            TabGraph.Reports -> ReportsTab.Hub
+                            TabGraph.Settings -> SettingsTab.Hub
+                        }
+                        navController.popBackStack(tabStartRoute, inclusive = false)
+                    } else {
+                        navController.navigate(tab) {
+                            launchSingleTop = true
+                            restoreState = true
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
                         }
                     }
                 },
@@ -67,7 +80,7 @@ fun AppShell() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = TabGraph.Markets,
+            startDestination = TabGraph.Home, // MOBILE-34: start on Home, not Markets
             modifier = Modifier.padding(innerPadding),
         ) {
             navigation<TabGraph.Home>(startDestination = HomeTab.Hub::class) {
