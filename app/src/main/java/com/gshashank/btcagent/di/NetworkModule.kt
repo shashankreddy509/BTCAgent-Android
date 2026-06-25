@@ -5,6 +5,7 @@ import com.gshashank.btcagent.data.network.AccessApi
 import com.gshashank.btcagent.data.network.BriefingApi
 import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.DashboardApi
+import com.gshashank.btcagent.data.network.OpenInterestApi
 import com.gshashank.btcagent.data.network.PositionsApi
 import com.gshashank.btcagent.data.network.PriceWebSocketClient
 import com.gshashank.btcagent.data.network.RegimeApi
@@ -151,6 +152,20 @@ object NetworkModule {
     @Singleton
     fun provideRegimeApi(retrofit: Retrofit): RegimeApi =
         retrofit.create(RegimeApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideOpenInterestApi(retrofit: Retrofit): OpenInterestApi =
+        retrofit.create(OpenInterestApi::class.java)
+
+    /**
+     * Provides a system clock lambda for injection.
+     * Used by [com.gshashank.btcagent.data.repository.OpenInterestRepositoryImpl] to compute
+     * signalAgeMs. Injectable for testability — tests pass a fake clock instead.
+     */
+    @Provides
+    @Singleton
+    fun provideSystemClock(): () -> Long = { System.currentTimeMillis() }
 
     /**
      * Provides [PriceWebSocketClient] with the production WS URL.
