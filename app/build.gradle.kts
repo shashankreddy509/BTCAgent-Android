@@ -103,6 +103,9 @@ dependencies {
     // Charts
     implementation(libs.vico.compose.m3)
 
+    // Markdown renderer — Morning Briefing screen (MOBILE-9)
+    implementation(libs.multiplatform.markdown.renderer)
+
     // Unit test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

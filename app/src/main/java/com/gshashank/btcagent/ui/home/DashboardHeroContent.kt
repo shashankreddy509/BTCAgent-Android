@@ -28,27 +28,25 @@ import com.gshashank.btcagent.ui.theme.BtcPriceDown
 import com.gshashank.btcagent.ui.theme.BtcPriceUp
 
 /**
- * Hero layout showing live BTC price, today's P&L, open positions, scanner card, and bot status.
+ * Hero layout showing live BTC price, today's P&L, open positions, and bot status.
  *
  * Sections:
  *  1. Live Price card with directional color animation and tick arrow.
  *  2. Today's P&L in points.
  *  3. Open Positions summary (count + aggregate unrealised P&L). Tapping navigates to MOBILE-6.
- *  4. Scanner card. Tapping navigates to MOBILE-8 scanner screen.
- *  5. Bot Status chip (Running/Stopped + LIVE/PAPER badge).
+ *  4. Bot Status chip (Running/Stopped + LIVE/PAPER badge).
+ *
+ * Scanner was relocated to the Markets hub (MOBILE-9). Access via the Markets tab → Scanner tile.
  *
  * Test seam: [testTag("dashboard_price")] on the price headline text.
  *
  * @param onPositionsClick Called when the user taps the Open Positions card; navigates to
  *   the MOBILE-6 positions list screen.
- * @param onScannerClick Called when the user taps the Scanner card; navigates to
- *   the MOBILE-8 scanner screen.
  */
 @Composable
 fun DashboardHeroContent(
     data: DashboardData,
     onPositionsClick: () -> Unit = {},
-    onScannerClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -70,10 +68,7 @@ fun DashboardHeroContent(
             onPositionsClick = onPositionsClick,
         )
 
-        // 4. Scanner card — tapping navigates to MOBILE-8 scanner screen
-        ScannerCard(onScannerClick = onScannerClick)
-
-        // 5. Bot Status chip
+        // 4. Bot Status chip
         BotStatusRow(running = data.botRunning, mode = data.botMode)
     }
 }
@@ -187,36 +182,6 @@ private fun OpenPositionsCard(
                 text = "$sign${"%.2f".format(unrealisedPnl)}",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 color = if (unrealisedPnl >= 0.0) BtcPriceUp else BtcPriceDown,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ScannerCard(
-    onScannerClick: () -> Unit,
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onScannerClick)
-            .testTag("dashboard_scanner_card"),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Scanner",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = "View signals →",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

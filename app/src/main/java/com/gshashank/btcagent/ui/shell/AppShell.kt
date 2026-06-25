@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.gshashank.btcagent.ui.home.HomeTabScreen
 import com.gshashank.btcagent.ui.markets.MarketsHubScreen
+import com.gshashank.btcagent.ui.markets.briefing.MorningBriefingScreen
 import com.gshashank.btcagent.ui.markets.stubs.AnalyticsScreen
 import com.gshashank.btcagent.ui.markets.stubs.BtcRegimeScreen
 import com.gshashank.btcagent.ui.markets.stubs.LiquidityMapScreen
@@ -89,9 +90,6 @@ fun AppShell() {
                         onPositionsClick = {
                             navController.navigate(HomeTab.Positions)
                         },
-                        onScannerClick = {
-                            navController.navigate(HomeTab.Scanner)
-                        },
                     )
                 }
                 composable<HomeTab.Positions> {
@@ -108,9 +106,6 @@ fun AppShell() {
                         onBack = { navController.popBackStack() },
                     )
                 }
-                composable<HomeTab.Scanner> {
-                    ScannerScreen(onBack = { navController.popBackStack() })
-                }
             }
             navigation<TabGraph.Markets>(startDestination = MarketsRoute.Hub::class) {
                 composable<MarketsRoute.Hub> {
@@ -123,6 +118,12 @@ fun AppShell() {
                 composable<MarketsRoute.LiquidityMap> { LiquidityMapScreen() }
                 composable<MarketsRoute.ZoneStrategies> { ZoneStrategiesScreen() }
                 composable<MarketsRoute.Analytics> { AnalyticsScreen() }
+                composable<MarketsRoute.MorningBriefing> {
+                    MorningBriefingScreen()
+                }
+                composable<MarketsRoute.Scanner> {
+                    ScannerScreen(onBack = { navController.popBackStack() })
+                }
             }
             navigation<TabGraph.Trade>(startDestination = TradeTab.Hub::class) {
                 composable<TradeTab.Hub> { TradeScreen() }

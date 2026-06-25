@@ -25,6 +25,7 @@ mockitoKotlin = "5.4.0"
 credentials = "1.5.0"
 googleid = "1.1.1"
 datastore = "1.1.4"
+multiplatformMarkdownRenderer = "0.32.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -79,6 +80,9 @@ googleid = { group = "com.google.android.libraries.identity.googleid", name = "g
 
 # Charts
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
+
+# Markdown renderer
+multiplatform-markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-android", version.ref = "multiplatformMarkdownRenderer" }
 
 # Test
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
