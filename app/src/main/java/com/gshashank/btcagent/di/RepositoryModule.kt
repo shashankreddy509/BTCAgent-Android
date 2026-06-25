@@ -14,6 +14,8 @@ import com.gshashank.btcagent.data.repository.DashboardRepository
 import com.gshashank.btcagent.data.repository.DashboardRepositoryImpl
 import com.gshashank.btcagent.data.repository.PositionsRepository
 import com.gshashank.btcagent.data.repository.PositionsRepositoryImpl
+import com.gshashank.btcagent.data.repository.RegimeRepository
+import com.gshashank.btcagent.data.repository.RegimeRepositoryImpl
 import com.gshashank.btcagent.data.repository.ReportsRepository
 import com.gshashank.btcagent.data.repository.ReportsRepositoryImpl
 import com.gshashank.btcagent.data.repository.ScannerRepository
@@ -70,4 +72,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBriefingRepository(impl: BriefingRepositoryImpl): BriefingRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRegimeRepository(impl: RegimeRepositoryImpl): RegimeRepository
 }

@@ -17,8 +17,8 @@ import androidx.navigation.toRoute
 import com.gshashank.btcagent.ui.home.HomeTabScreen
 import com.gshashank.btcagent.ui.markets.MarketsHubScreen
 import com.gshashank.btcagent.ui.markets.briefing.MorningBriefingScreen
+import com.gshashank.btcagent.ui.markets.regime.BtcRegimeScreen
 import com.gshashank.btcagent.ui.markets.stubs.AnalyticsScreen
-import com.gshashank.btcagent.ui.markets.stubs.BtcRegimeScreen
 import com.gshashank.btcagent.ui.markets.stubs.LiquidityMapScreen
 import com.gshashank.btcagent.ui.markets.stubs.MarkovMatrixScreen
 import com.gshashank.btcagent.ui.markets.stubs.OpenInterestScreen
