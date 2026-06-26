@@ -32,6 +32,7 @@ sealed interface HomeTab {
 
 sealed interface TradeTab {
     @Serializable data object Hub : TradeTab
+    @Serializable data object ManualEntry : TradeTab
 }
 
 sealed interface ReportsTab {

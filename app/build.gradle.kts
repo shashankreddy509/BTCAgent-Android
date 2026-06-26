@@ -106,6 +106,10 @@ dependencies {
     // Markdown renderer — Morning Briefing screen (MOBILE-9)
     implementation(libs.multiplatform.markdown.renderer)
 
+    // Biometric authentication — MOBILE-19
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment)
+
     // Unit test
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
