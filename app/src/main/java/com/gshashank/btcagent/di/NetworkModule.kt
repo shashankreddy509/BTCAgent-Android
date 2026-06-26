@@ -14,6 +14,7 @@ import com.gshashank.btcagent.data.network.PriceWebSocketClient
 import com.gshashank.btcagent.data.network.RegimeApi
 import com.gshashank.btcagent.data.network.ReportsApi
 import com.gshashank.btcagent.data.network.ScannerApi
+import com.gshashank.btcagent.data.network.SettingsApi
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import com.gshashank.btcagent.data.network.AuthInterceptor
 import com.gshashank.btcagent.data.network.TradingControlApi
@@ -189,6 +190,12 @@ object NetworkModule {
     @Singleton
     fun provideManualEntryApi(retrofit: Retrofit): ManualEntryApi =
         retrofit.create(ManualEntryApi::class.java)
+
+    // SettingsApi uses the AUTHENTICATED Retrofit — user settings endpoints require the Firebase token.
+    @Provides
+    @Singleton
+    fun provideSettingsApi(retrofit: Retrofit): SettingsApi =
+        retrofit.create(SettingsApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.
