@@ -15,6 +15,7 @@ import com.gshashank.btcagent.data.network.ReportsApi
 import com.gshashank.btcagent.data.network.ScannerApi
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import com.gshashank.btcagent.data.network.AuthInterceptor
+import com.gshashank.btcagent.data.network.VolumeProfileApi
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -169,6 +170,11 @@ object NetworkModule {
     @Singleton
     fun provideLiquidityApi(retrofit: Retrofit): LiquidityApi =
         retrofit.create(LiquidityApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideVolumeProfileApi(@Named("public") retrofit: Retrofit): VolumeProfileApi =
+        retrofit.create(VolumeProfileApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.

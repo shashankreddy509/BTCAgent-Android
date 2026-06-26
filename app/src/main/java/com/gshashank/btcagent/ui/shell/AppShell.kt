@@ -22,7 +22,7 @@ import com.gshashank.btcagent.ui.markets.liquidity.LiquidityMapScreen
 import com.gshashank.btcagent.ui.markets.markov.MarkovMatrixScreen
 import com.gshashank.btcagent.ui.markets.oi.OpenInterestScreen
 import com.gshashank.btcagent.ui.markets.regime.BtcRegimeScreen
-import com.gshashank.btcagent.ui.markets.stubs.VolumeProfileScreen
+import com.gshashank.btcagent.ui.markets.volume_profile.VolumeProfileScreen
 import com.gshashank.btcagent.ui.markets.stubs.ZoneStrategiesScreen
 import com.gshashank.btcagent.ui.navigation.HomeTab
 import com.gshashank.btcagent.ui.navigation.MarketsRoute
