@@ -6,6 +6,8 @@ import com.gshashank.btcagent.data.repository.AccessRepository
 import com.gshashank.btcagent.data.repository.AccessRepositoryImpl
 import com.gshashank.btcagent.data.repository.AnalyticsRepository
 import com.gshashank.btcagent.data.repository.AnalyticsRepositoryImpl
+import com.gshashank.btcagent.data.repository.AppearanceRepository
+import com.gshashank.btcagent.data.repository.AppearanceRepositoryImpl
 import com.gshashank.btcagent.data.repository.AuthRepository
 import com.gshashank.btcagent.data.repository.AuthRepositoryImpl
 import com.gshashank.btcagent.data.repository.BriefingRepository
@@ -30,6 +32,8 @@ import com.gshashank.btcagent.data.repository.ReportsRepository
 import com.gshashank.btcagent.data.repository.ReportsRepositoryImpl
 import com.gshashank.btcagent.data.repository.ScannerRepository
 import com.gshashank.btcagent.data.repository.ScannerRepositoryImpl
+import com.gshashank.btcagent.data.repository.SettingsRepository
+import com.gshashank.btcagent.data.repository.SettingsRepositoryImpl
 import com.gshashank.btcagent.data.repository.TradingControlRepository
 import com.gshashank.btcagent.data.repository.TradingControlRepositoryImpl
 import com.gshashank.btcagent.data.repository.VolumeProfileRepository
@@ -118,4 +122,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindManualEntryRepository(impl: ManualEntryRepositoryImpl): ManualEntryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAppearanceRepository(impl: AppearanceRepositoryImpl): AppearanceRepository
 }

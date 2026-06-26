@@ -39,7 +39,7 @@ import com.gshashank.btcagent.ui.trade.TradingControlScreen
 import com.gshashank.btcagent.ui.trade.manual.ManualEntryScreen
 
 @Composable
-fun AppShell() {
+fun AppShell(onSignedOut: () -> Unit = {}) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
 
@@ -138,7 +138,9 @@ fun AppShell() {
                 composable<ReportsTab.Hub> { ReportsScreen() }
             }
             navigation<TabGraph.Settings>(startDestination = SettingsTab.Hub::class) {
-                composable<SettingsTab.Hub> { SettingsScreen() }
+                composable<SettingsTab.Hub> {
+                    SettingsScreen(onSignedOut = onSignedOut)
+                }
             }
         }
     }
