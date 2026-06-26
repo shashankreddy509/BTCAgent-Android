@@ -32,6 +32,7 @@ import com.gshashank.btcagent.ui.navigation.MarketsRoute
  * screen stays decoupled from the nav graph and is straightforward to preview/test.
  *
  * The Markov Matrix tile is gated behind [CatalogFlags.MARKOV_MATRIX] via [MarketsHubViewModel].
+ * The Volume Profile tile is gated behind [CatalogFlags.VOLUME_PROFILE] via [MarketsHubViewModel].
  * The Liquidity Map tile is gated behind [CatalogFlags.LIQUIDITY_MAP] via [MarketsHubViewModel].
  * The Analytics tile is gated behind [CatalogFlags.ANALYTICS] via [MarketsHubViewModel].
  * All other tiles are rendered unconditionally.
@@ -42,6 +43,7 @@ fun MarketsHubScreen(
     viewModel: MarketsHubViewModel = hiltViewModel(),
 ) {
     val isMarkovEnabled by viewModel.isMarkovEnabled.collectAsStateWithLifecycle()
+    val isVolumeProfileEnabled by viewModel.isVolumeProfileEnabled.collectAsStateWithLifecycle()
     val isLiquidityMapEnabled by viewModel.isLiquidityMapEnabled.collectAsStateWithLifecycle()
     val isAnalyticsEnabled by viewModel.isAnalyticsEnabled.collectAsStateWithLifecycle()
 
@@ -85,13 +87,15 @@ fun MarketsHubScreen(
                     )
                 }
             }
-            item {
-                AnalyticsTile(
-                    icon = "📊",
-                    label = "Volume Profile",
-                    testTag = "tile_volume_profile",
-                    onClick = { onTileClick(MarketsRoute.VolumeProfile) },
-                )
+            if (isVolumeProfileEnabled) {
+                item {
+                    AnalyticsTile(
+                        icon = "📊",
+                        label = "Volume Profile",
+                        testTag = "tile_volume_profile",
+                        onClick = { onTileClick(MarketsRoute.VolumeProfile) },
+                    )
+                }
             }
             if (isLiquidityMapEnabled) {
                 item {

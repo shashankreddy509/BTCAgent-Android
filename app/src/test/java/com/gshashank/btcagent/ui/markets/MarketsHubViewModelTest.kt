@@ -18,7 +18,8 @@ import org.junit.Test
 
 /**
  * JVM unit tests for [MarketsHubViewModel] — MOBILE-13 (catalog gating) + MOBILE-10 (hub)
- * + MOBILE-15 (Liquidity Map catalog gating) + MOBILE-17 (Analytics catalog gating).
+ * + MOBILE-15 (Liquidity Map catalog gating) + MOBILE-17 (Analytics catalog gating)
+ * + MOBILE-14 (Volume Profile catalog gating).
  *
  * This suite extends the original MOBILE-10 stub tests to add MOBILE-13 catalog gating:
  * the Markov Matrix tile/screen must only be accessible when [CatalogFlags.MARKOV_MATRIX]
@@ -27,6 +28,8 @@ import org.junit.Test
  * MOBILE-15 adds [isLiquidityMapEnabled] gating via [CatalogFlags.LIQUIDITY_MAP] (id = 100005).
  *
  * MOBILE-17 adds [isAnalyticsEnabled] gating via [CatalogFlags.ANALYTICS] (id = 100006).
+ *
+ * MOBILE-14 adds [isVolumeProfileEnabled] gating via [CatalogFlags.VOLUME_PROFILE] (id = 100004).
  *
  * Uses [FakeCatalogRepository] (hand-written fake) so no DataStore or Firestore is touched.
  * [MainDispatcherRule] installs [kotlinx.coroutines.test.UnconfinedTestDispatcher] as
@@ -51,10 +54,16 @@ import org.junit.Test
  *   - [CatalogFlags.ANALYTICS] ON → [MarketsHubViewModel.isAnalyticsEnabled] emits `true`
  *     (tile shown — new behavior).
  *
- * All tests that reference [MarketsHubViewModel.isMarkovEnabled], [isLiquidityMapEnabled], or
- * [isAnalyticsEnabled] MUST fail (red) until [MarketsHubViewModel] is updated to accept
- * [CatalogRepository] and expose those flows. The original 4 MOBILE-10 tests must also fail
- * until the ViewModel re-adopts [CatalogRepository].
+ * **Catalog rollback contract (MOBILE-14)**:
+ *   - [CatalogFlags.VOLUME_PROFILE] OFF/absent → [MarketsHubViewModel.isVolumeProfileEnabled] emits
+ *     `false` (tile hidden — old/absent behavior).
+ *   - [CatalogFlags.VOLUME_PROFILE] ON → [MarketsHubViewModel.isVolumeProfileEnabled] emits `true`
+ *     (tile shown — new behavior).
+ *
+ * All tests that reference [MarketsHubViewModel.isMarkovEnabled], [isLiquidityMapEnabled],
+ * [isAnalyticsEnabled], or [isVolumeProfileEnabled] MUST fail (red) until [MarketsHubViewModel]
+ * is updated to accept [CatalogRepository] and expose those flows. The original 4 MOBILE-10
+ * tests must also fail until the ViewModel re-adopts [CatalogRepository].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MarketsHubViewModelTest {
@@ -370,6 +379,62 @@ class MarketsHubViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    // =========================================================================
+    // MOBILE-14 Catalog gating: isVolumeProfileEnabled defaults to false (flag OFF)
+    //
+    // Rollback contract: when VOLUME_PROFILE flag is OFF/absent the Volume Profile tile must
+    // be hidden — this is the OLD/absent behavior (feature not shown).
+    // =========================================================================
+
+    @Test
+    fun `volumeProfileFlagOff_isVolumeProfileEnabledFalse`() = runTest {
+        // Flag OFF — the default absent behavior; tile must be hidden.
+        fakeCatalog.volumeProfileEnabled = false
+
+        val viewModel = createViewModel()
+
+        viewModel.isVolumeProfileEnabled.test {
+            advanceUntilIdle()
+
+            val emission = awaitItem()
+            assertFalse(
+                "isVolumeProfileEnabled must emit false when CatalogFlags.VOLUME_PROFILE (id=100004) " +
+                    "is OFF — Volume Profile tile must not be accessible in the hub (old/absent behavior)",
+                emission,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // =========================================================================
+    // MOBILE-14 Catalog gating: isVolumeProfileEnabled becomes true when flag is ON
+    //
+    // Rollback contract: when VOLUME_PROFILE flag is ON the Volume Profile tile must be
+    // visible — this is the NEW behavior (feature shown).
+    // =========================================================================
+
+    @Test
+    fun `volumeProfileFlagOn_isVolumeProfileEnabledTrue`() = runTest {
+        // Flag ON — the new Volume Profile screen is accessible.
+        fakeCatalog.volumeProfileEnabled = true
+
+        val viewModel = createViewModel()
+
+        viewModel.isVolumeProfileEnabled.test {
+            advanceUntilIdle()
+
+            val emission = awaitItem()
+            assertTrue(
+                "isVolumeProfileEnabled must emit true when CatalogFlags.VOLUME_PROFILE (id=100004) " +
+                    "is ON — Volume Profile tile must be accessible in the hub (new behavior)",
+                emission,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
 
 // =============================================================================
@@ -387,6 +452,9 @@ class MarketsHubViewModelTest {
  * [analyticsEnabled] controls the sync [isEnabled] response for [CatalogFlags.ANALYTICS].
  * [analyticsFlow] controls the [isEnabledFlow] response for ANALYTICS; defaults to
  * [flowOf(analyticsEnabled)].
+ * [volumeProfileEnabled] controls the sync [isEnabled] response for [CatalogFlags.VOLUME_PROFILE].
+ * [volumeProfileFlow] controls the [isEnabledFlow] response for VOLUME_PROFILE; defaults to
+ * [flowOf(volumeProfileEnabled)].
  * All other flags default to `false`.
  */
 private class FakeCatalogRepository : CatalogRepository {
@@ -406,6 +474,11 @@ private class FakeCatalogRepository : CatalogRepository {
     /** Override this to supply a multi-emission flow for ANALYTICS. */
     var analyticsFlow: Flow<Boolean>? = null
 
+    var volumeProfileEnabled: Boolean = false
+
+    /** Override this to supply a multi-emission flow for VOLUME_PROFILE. */
+    var volumeProfileFlow: Flow<Boolean>? = null
+
     override suspend fun refresh() {
         // No-op in tests — tests configure the result directly.
     }
@@ -420,6 +493,9 @@ private class FakeCatalogRepository : CatalogRepository {
         if (id == CatalogFlags.ANALYTICS) {
             return analyticsFlow ?: flowOf(analyticsEnabled)
         }
+        if (id == CatalogFlags.VOLUME_PROFILE) {
+            return volumeProfileFlow ?: flowOf(volumeProfileEnabled)
+        }
         return flowOf(default)
     }
 
@@ -427,6 +503,7 @@ private class FakeCatalogRepository : CatalogRepository {
         if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
         if (id == CatalogFlags.LIQUIDITY_MAP) return liquidityMapEnabled
         if (id == CatalogFlags.ANALYTICS) return analyticsEnabled
+        if (id == CatalogFlags.VOLUME_PROFILE) return volumeProfileEnabled
         return false
     }
 
@@ -434,6 +511,7 @@ private class FakeCatalogRepository : CatalogRepository {
         if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
         if (id == CatalogFlags.LIQUIDITY_MAP) return liquidityMapEnabled
         if (id == CatalogFlags.ANALYTICS) return analyticsEnabled
+        if (id == CatalogFlags.VOLUME_PROFILE) return volumeProfileEnabled
         return default
     }
 }

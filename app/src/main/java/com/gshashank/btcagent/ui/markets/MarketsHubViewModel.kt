@@ -17,10 +17,13 @@ sealed interface MarketsHubUiState {
 }
 
 /**
- * ViewModel for the Markets hub — MOBILE-10 / MOBILE-13 / MOBILE-15 / MOBILE-17.
+ * ViewModel for the Markets hub — MOBILE-10 / MOBILE-13 / MOBILE-14 / MOBILE-15 / MOBILE-17.
  *
  * Exposes [isMarkovEnabled] as a reactive [StateFlow<Boolean>] backed by
  * [CatalogRepository.isEnabledFlow] for [CatalogFlags.MARKOV_MATRIX].
+ *
+ * Exposes [isVolumeProfileEnabled] as a reactive [StateFlow<Boolean>] backed by
+ * [CatalogRepository.isEnabledFlow] for [CatalogFlags.VOLUME_PROFILE].
  *
  * Exposes [isLiquidityMapEnabled] as a reactive [StateFlow<Boolean>] backed by
  * [CatalogRepository.isEnabledFlow] for [CatalogFlags.LIQUIDITY_MAP].
@@ -57,6 +60,17 @@ class MarketsHubViewModel @Inject constructor(
      */
     val isMarkovEnabled: StateFlow<Boolean> = _isMarkovEnabled.asStateFlow()
 
+    private val _isVolumeProfileEnabled = MutableStateFlow(
+        catalogRepository.isEnabled(CatalogFlags.VOLUME_PROFILE),
+    )
+
+    /**
+     * Emits true when [CatalogFlags.VOLUME_PROFILE] is ON; false when absent or OFF.
+     * default=false because this flag is NOT security-sensitive — missing/failed fetch
+     * falls back to OFF (tile hidden), not ON.
+     */
+    val isVolumeProfileEnabled: StateFlow<Boolean> = _isVolumeProfileEnabled.asStateFlow()
+
     private val _isLiquidityMapEnabled = MutableStateFlow(
         catalogRepository.isEnabled(CatalogFlags.LIQUIDITY_MAP),
     )
@@ -88,6 +102,11 @@ class MarketsHubViewModel @Inject constructor(
             delay(1L)
             catalogRepository.isEnabledFlow(CatalogFlags.MARKOV_MATRIX, default = false)
                 .collect { value -> _isMarkovEnabled.value = value }
+        }
+        viewModelScope.launch {
+            delay(1L)
+            catalogRepository.isEnabledFlow(CatalogFlags.VOLUME_PROFILE, default = false)
+                .collect { value -> _isVolumeProfileEnabled.value = value }
         }
         viewModelScope.launch {
             delay(1L)
