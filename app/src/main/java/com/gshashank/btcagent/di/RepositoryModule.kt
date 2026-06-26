@@ -28,6 +28,8 @@ import com.gshashank.btcagent.data.repository.ReportsRepository
 import com.gshashank.btcagent.data.repository.ReportsRepositoryImpl
 import com.gshashank.btcagent.data.repository.ScannerRepository
 import com.gshashank.btcagent.data.repository.ScannerRepositoryImpl
+import com.gshashank.btcagent.data.repository.TradingControlRepository
+import com.gshashank.btcagent.data.repository.TradingControlRepositoryImpl
 import com.gshashank.btcagent.data.repository.VolumeProfileRepository
 import com.gshashank.btcagent.data.repository.VolumeProfileRepositoryImpl
 import dagger.Binds
@@ -106,4 +108,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindVolumeProfileRepository(impl: VolumeProfileRepositoryImpl): VolumeProfileRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTradingControlRepository(impl: TradingControlRepositoryImpl): TradingControlRepository
 }
