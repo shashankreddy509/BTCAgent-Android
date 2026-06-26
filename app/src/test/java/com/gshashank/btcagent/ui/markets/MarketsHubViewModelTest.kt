@@ -18,13 +18,15 @@ import org.junit.Test
 
 /**
  * JVM unit tests for [MarketsHubViewModel] — MOBILE-13 (catalog gating) + MOBILE-10 (hub)
- * + MOBILE-15 (Liquidity Map catalog gating).
+ * + MOBILE-15 (Liquidity Map catalog gating) + MOBILE-17 (Analytics catalog gating).
  *
  * This suite extends the original MOBILE-10 stub tests to add MOBILE-13 catalog gating:
  * the Markov Matrix tile/screen must only be accessible when [CatalogFlags.MARKOV_MATRIX]
  * (id = 100003) is ON.
  *
  * MOBILE-15 adds [isLiquidityMapEnabled] gating via [CatalogFlags.LIQUIDITY_MAP] (id = 100005).
+ *
+ * MOBILE-17 adds [isAnalyticsEnabled] gating via [CatalogFlags.ANALYTICS] (id = 100006).
  *
  * Uses [FakeCatalogRepository] (hand-written fake) so no DataStore or Firestore is touched.
  * [MainDispatcherRule] installs [kotlinx.coroutines.test.UnconfinedTestDispatcher] as
@@ -43,10 +45,16 @@ import org.junit.Test
  *   - [CatalogFlags.LIQUIDITY_MAP] ON → [MarketsHubViewModel.isLiquidityMapEnabled] emits `true`
  *     (tile shown — new behavior).
  *
- * All tests that reference [MarketsHubViewModel.isMarkovEnabled] or [isLiquidityMapEnabled] MUST
- * fail (red) until [MarketsHubViewModel] is updated to accept [CatalogRepository] and expose
- * those flows. The original 4 MOBILE-10 tests must also fail until the ViewModel re-adopts
- * [CatalogRepository].
+ * **Catalog rollback contract (MOBILE-17)**:
+ *   - [CatalogFlags.ANALYTICS] OFF/absent → [MarketsHubViewModel.isAnalyticsEnabled] emits `false`
+ *     (tile hidden — old/absent behavior).
+ *   - [CatalogFlags.ANALYTICS] ON → [MarketsHubViewModel.isAnalyticsEnabled] emits `true`
+ *     (tile shown — new behavior).
+ *
+ * All tests that reference [MarketsHubViewModel.isMarkovEnabled], [isLiquidityMapEnabled], or
+ * [isAnalyticsEnabled] MUST fail (red) until [MarketsHubViewModel] is updated to accept
+ * [CatalogRepository] and expose those flows. The original 4 MOBILE-10 tests must also fail
+ * until the ViewModel re-adopts [CatalogRepository].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MarketsHubViewModelTest {
@@ -304,6 +312,64 @@ class MarketsHubViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // =========================================================================
+    // MOBILE-17 Catalog gating: isAnalyticsEnabled defaults to false (flag OFF)
+    //
+    // Rollback contract: when ANALYTICS flag is OFF/absent the Analytics tile must be
+    // hidden — this is the OLD/absent behavior (feature not shown).
+    // =========================================================================
+
+    @Test
+    fun `analytics flag off hides tile - isAnalyticsEnabled emits false when ANALYTICS flag is OFF`() =
+        runTest {
+            // Flag OFF — the default absent behavior; tile must be hidden.
+            fakeCatalog.analyticsEnabled = false
+
+            val viewModel = createViewModel()
+
+            viewModel.isAnalyticsEnabled.test {
+                advanceUntilIdle()
+
+                val emission = awaitItem()
+                assertFalse(
+                    "isAnalyticsEnabled must emit false when CatalogFlags.ANALYTICS (id=100006) is OFF — " +
+                        "Analytics tile must not be accessible in the hub (old/absent behavior)",
+                    emission,
+                )
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // =========================================================================
+    // MOBILE-17 Catalog gating: isAnalyticsEnabled becomes true when flag is ON
+    //
+    // Rollback contract: when ANALYTICS flag is ON the Analytics tile must be
+    // visible — this is the NEW behavior (feature shown).
+    // =========================================================================
+
+    @Test
+    fun `analytics flag on shows tile - isAnalyticsEnabled emits true when ANALYTICS flag is ON`() =
+        runTest {
+            // Flag ON — the new Analytics screen is accessible.
+            fakeCatalog.analyticsEnabled = true
+
+            val viewModel = createViewModel()
+
+            viewModel.isAnalyticsEnabled.test {
+                advanceUntilIdle()
+
+                val emission = awaitItem()
+                assertTrue(
+                    "isAnalyticsEnabled must emit true when CatalogFlags.ANALYTICS (id=100006) is ON — " +
+                        "Analytics tile must be accessible in the hub (new behavior)",
+                    emission,
+                )
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }
 
 // =============================================================================
@@ -318,6 +384,9 @@ class MarketsHubViewModelTest {
  * [liquidityMapEnabled] controls the sync [isEnabled] response for [CatalogFlags.LIQUIDITY_MAP].
  * [liquidityMapFlow] controls the [isEnabledFlow] response for LIQUIDITY_MAP; defaults to
  * [flowOf(liquidityMapEnabled)].
+ * [analyticsEnabled] controls the sync [isEnabled] response for [CatalogFlags.ANALYTICS].
+ * [analyticsFlow] controls the [isEnabledFlow] response for ANALYTICS; defaults to
+ * [flowOf(analyticsEnabled)].
  * All other flags default to `false`.
  */
 private class FakeCatalogRepository : CatalogRepository {
@@ -332,6 +401,11 @@ private class FakeCatalogRepository : CatalogRepository {
     /** Override this to supply a multi-emission flow for LIQUIDITY_MAP. */
     var liquidityMapFlow: Flow<Boolean>? = null
 
+    var analyticsEnabled: Boolean = false
+
+    /** Override this to supply a multi-emission flow for ANALYTICS. */
+    var analyticsFlow: Flow<Boolean>? = null
+
     override suspend fun refresh() {
         // No-op in tests — tests configure the result directly.
     }
@@ -343,18 +417,23 @@ private class FakeCatalogRepository : CatalogRepository {
         if (id == CatalogFlags.LIQUIDITY_MAP) {
             return liquidityMapFlow ?: flowOf(liquidityMapEnabled)
         }
+        if (id == CatalogFlags.ANALYTICS) {
+            return analyticsFlow ?: flowOf(analyticsEnabled)
+        }
         return flowOf(default)
     }
 
     override fun isEnabled(id: Int): Boolean {
         if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
         if (id == CatalogFlags.LIQUIDITY_MAP) return liquidityMapEnabled
+        if (id == CatalogFlags.ANALYTICS) return analyticsEnabled
         return false
     }
 
     override fun isEnabled(id: Int, default: Boolean): Boolean {
         if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
         if (id == CatalogFlags.LIQUIDITY_MAP) return liquidityMapEnabled
+        if (id == CatalogFlags.ANALYTICS) return analyticsEnabled
         return default
     }
 }

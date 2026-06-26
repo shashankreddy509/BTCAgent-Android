@@ -35,4 +35,10 @@ object CatalogFlags {
      *  OFF/absent = tile hidden (default=false at isEnabledFlow call site; not security-sensitive).
      *  Allocated via BTCWEB-30; live catalog v7, seq 5. */
     const val LIQUIDITY_MAP = 100005
+
+    /** analytics — android 100006 / iOS 200006.
+     *  ON  = Markets hub Analytics tile + screen visible.
+     *  OFF/absent = tile hidden (default=false at isEnabledFlow call site; not security-sensitive).
+     *  Allocated via BTCWEB-31; live catalog v8, seq 6. */
+    const val ANALYTICS = 100006
 }

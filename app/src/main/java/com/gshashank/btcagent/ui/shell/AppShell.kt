@@ -16,12 +16,12 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.gshashank.btcagent.ui.home.HomeTabScreen
 import com.gshashank.btcagent.ui.markets.MarketsHubScreen
+import com.gshashank.btcagent.ui.markets.analytics.AnalyticsScreen
 import com.gshashank.btcagent.ui.markets.briefing.MorningBriefingScreen
 import com.gshashank.btcagent.ui.markets.liquidity.LiquidityMapScreen
 import com.gshashank.btcagent.ui.markets.markov.MarkovMatrixScreen
 import com.gshashank.btcagent.ui.markets.oi.OpenInterestScreen
 import com.gshashank.btcagent.ui.markets.regime.BtcRegimeScreen
-import com.gshashank.btcagent.ui.markets.stubs.AnalyticsScreen
 import com.gshashank.btcagent.ui.markets.stubs.VolumeProfileScreen
 import com.gshashank.btcagent.ui.markets.stubs.ZoneStrategiesScreen
 import com.gshashank.btcagent.ui.navigation.HomeTab

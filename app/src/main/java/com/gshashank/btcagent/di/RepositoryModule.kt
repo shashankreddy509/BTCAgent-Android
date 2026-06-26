@@ -4,6 +4,8 @@ import com.gshashank.btcagent.data.network.FirebaseTokenProvider
 import com.gshashank.btcagent.data.network.TokenProvider
 import com.gshashank.btcagent.data.repository.AccessRepository
 import com.gshashank.btcagent.data.repository.AccessRepositoryImpl
+import com.gshashank.btcagent.data.repository.AnalyticsRepository
+import com.gshashank.btcagent.data.repository.AnalyticsRepositoryImpl
 import com.gshashank.btcagent.data.repository.AuthRepository
 import com.gshashank.btcagent.data.repository.AuthRepositoryImpl
 import com.gshashank.btcagent.data.repository.BriefingRepository
@@ -94,4 +96,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindLiquidityRepository(impl: LiquidityRepositoryImpl): LiquidityRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAnalyticsRepository(impl: AnalyticsRepositoryImpl): AnalyticsRepository
 }

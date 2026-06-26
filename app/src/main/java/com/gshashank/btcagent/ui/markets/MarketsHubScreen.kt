@@ -33,6 +33,7 @@ import com.gshashank.btcagent.ui.navigation.MarketsRoute
  *
  * The Markov Matrix tile is gated behind [CatalogFlags.MARKOV_MATRIX] via [MarketsHubViewModel].
  * The Liquidity Map tile is gated behind [CatalogFlags.LIQUIDITY_MAP] via [MarketsHubViewModel].
+ * The Analytics tile is gated behind [CatalogFlags.ANALYTICS] via [MarketsHubViewModel].
  * All other tiles are rendered unconditionally.
  */
 @Composable
@@ -42,6 +43,7 @@ fun MarketsHubScreen(
 ) {
     val isMarkovEnabled by viewModel.isMarkovEnabled.collectAsStateWithLifecycle()
     val isLiquidityMapEnabled by viewModel.isLiquidityMapEnabled.collectAsStateWithLifecycle()
+    val isAnalyticsEnabled by viewModel.isAnalyticsEnabled.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -109,13 +111,15 @@ fun MarketsHubScreen(
                     onClick = { onTileClick(MarketsRoute.ZoneStrategies) },
                 )
             }
-            item {
-                AnalyticsTile(
-                    icon = "🔬",
-                    label = "Analytics",
-                    testTag = "tile_analytics",
-                    onClick = { onTileClick(MarketsRoute.Analytics) },
-                )
+            if (isAnalyticsEnabled) {
+                item {
+                    AnalyticsTile(
+                        icon = "🔬",
+                        label = "Analytics",
+                        testTag = "tile_analytics",
+                        onClick = { onTileClick(MarketsRoute.Analytics) },
+                    )
+                }
             }
             item {
                 AnalyticsTile(
