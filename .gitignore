@@ -16,3 +16,6 @@ app/google-services.json
 
 # Claude Code session state
 .claude/
+
+# Local generated dev docs (not part of any feature PR)
+docs/

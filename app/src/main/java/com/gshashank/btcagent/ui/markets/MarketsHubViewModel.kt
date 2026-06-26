@@ -17,7 +17,7 @@ sealed interface MarketsHubUiState {
 }
 
 /**
- * ViewModel for the Markets hub — MOBILE-10 / MOBILE-13 / MOBILE-15.
+ * ViewModel for the Markets hub — MOBILE-10 / MOBILE-13 / MOBILE-15 / MOBILE-17.
  *
  * Exposes [isMarkovEnabled] as a reactive [StateFlow<Boolean>] backed by
  * [CatalogRepository.isEnabledFlow] for [CatalogFlags.MARKOV_MATRIX].
@@ -25,10 +25,13 @@ sealed interface MarketsHubUiState {
  * Exposes [isLiquidityMapEnabled] as a reactive [StateFlow<Boolean>] backed by
  * [CatalogRepository.isEnabledFlow] for [CatalogFlags.LIQUIDITY_MAP].
  *
+ * Exposes [isAnalyticsEnabled] as a reactive [StateFlow<Boolean>] backed by
+ * [CatalogRepository.isEnabledFlow] for [CatalogFlags.ANALYTICS].
+ *
  * Tiles are only visible when their respective flags are true
  * (default=false → absent flag hides the tile — instant rollback).
  *
- * Both flows are seeded with the synchronous [CatalogRepository.isEnabled] result so
+ * All flows are seeded with the synchronous [CatalogRepository.isEnabled] result so
  * that the initial UI state is immediately correct (no flicker). The reactive flow then
  * replaces the initial value via a [viewModelScope.launch] coroutine that uses [delay(1L)]
  * to create a virtual-time suspension point — matching the technique in [MarkovMatrixViewModel]
@@ -65,6 +68,17 @@ class MarketsHubViewModel @Inject constructor(
      */
     val isLiquidityMapEnabled: StateFlow<Boolean> = _isLiquidityMapEnabled.asStateFlow()
 
+    private val _isAnalyticsEnabled = MutableStateFlow(
+        catalogRepository.isEnabled(CatalogFlags.ANALYTICS),
+    )
+
+    /**
+     * Emits true when [CatalogFlags.ANALYTICS] is ON; false when absent or OFF.
+     * default=false because this flag is NOT security-sensitive — missing/failed fetch
+     * falls back to OFF (tile hidden), not ON.
+     */
+    val isAnalyticsEnabled: StateFlow<Boolean> = _isAnalyticsEnabled.asStateFlow()
+
     init {
         viewModelScope.launch {
             // delay(1L) creates a virtual-time suspension point so that Turbine subscribers in
@@ -79,6 +93,11 @@ class MarketsHubViewModel @Inject constructor(
             delay(1L)
             catalogRepository.isEnabledFlow(CatalogFlags.LIQUIDITY_MAP, default = false)
                 .collect { value -> _isLiquidityMapEnabled.value = value }
+        }
+        viewModelScope.launch {
+            delay(1L)
+            catalogRepository.isEnabledFlow(CatalogFlags.ANALYTICS, default = false)
+                .collect { value -> _isAnalyticsEnabled.value = value }
         }
     }
 }

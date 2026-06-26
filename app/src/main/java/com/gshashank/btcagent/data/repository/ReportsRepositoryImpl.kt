@@ -25,7 +25,8 @@ import javax.inject.Singleton
  *
  * 2. winRatePct: replicates the backend CANONICAL win-rate (analysis.aggregate_trades +
  *    _leg_points + _metrics) so the mobile number matches the server's. Per TRADE, not per leg:
- *    group history legs by position.signal_id; per trade points = qty-weighted avg of leg points
+ *    delegates to [aggregateTrades] from [TradeAggregation.kt] — group history legs by
+ *    position.signal_id; per trade points = qty-weighted avg of leg points
  *    (direction-aware: long close-entry, short entry-close; weighted by qty_closed, fallback
  *    position.qty, then 1.0); trade counts only if it has computable points (denominator n);
  *    win = points > 0; breakeven (==0) is in n but not a win. winRatePct = wins / n * 100.
@@ -73,29 +74,10 @@ class ReportsRepositoryImpl @Inject constructor(
             val historyRows = body.history
 
             // 2. winRatePct — canonical (mirrors backend analysis.aggregate_trades + _metrics):
-            // group legs by signal_id, qty-weighted direction-aware points per trade.
-            // Fallback key uses the row INDEX (mirrors Python's id(r) per-row uniqueness) so two
-            // rows missing BOTH signal_id and closed_at don't collapse into one phantom trade.
-            val tradePoints = historyRows
-                .mapIndexed { index, row ->
-                    (row.position?.signalId ?: row.closedAt ?: "keyless_$index") to row
-                }
-                .groupBy({ it.first }, { it.second })
-                .values
-                .mapNotNull { legs ->
-                    var wsum = 0.0
-                    var qsum = 0.0
-                    for (leg in legs) {
-                        val pos = leg.position
-                        val pts = legPoints(pos?.direction, pos?.entryPrice, leg.closePrice) ?: continue
-                        val q = (leg.qtyClosed ?: pos?.qty ?: 1.0).let { if (it == 0.0) 1.0 else it }
-                        wsum += pts * q
-                        qsum += q
-                    }
-                    if (qsum != 0.0) wsum / qsum else null // null points → excluded from n
-                }
-            val n = tradePoints.size
-            val wins = tradePoints.count { it > 0.0 } // breakeven (==0) is in n, not a win
+            // Delegate to shared TradeAggregation functions (extracted for reuse with Analytics).
+            val trades = aggregateTrades(historyRows)
+            val n = trades.size
+            val wins = trades.count { it.points > 0.0 } // breakeven (==0) is in n, not a win
             val winRatePct = if (n == 0) 0.0 else (wins.toDouble() / n) * 100.0
 
             // 3. weekPnl — sum pnl_closed for rows within the last 7 calendar days.
@@ -111,7 +93,7 @@ class ReportsRepositoryImpl @Inject constructor(
             }
 
             // 4. Map history rows 1:1 to ClosedTrade (partial + final are two separate rows).
-            val trades = historyRows.mapNotNull { entry ->
+            val closedTrades = historyRows.mapNotNull { entry ->
                 val closedAt = entry.closedAt ?: return@mapNotNull null
                 val closePrice = entry.closePrice ?: return@mapNotNull null
                 val pnlClosed = entry.pnlClosed ?: return@mapNotNull null
@@ -141,23 +123,14 @@ class ReportsRepositoryImpl @Inject constructor(
                     signalsToday = signalsToday,
                     winRatePct = winRatePct,
                     weekPnl = weekPnl,
-                    trades = trades,
+                    trades = closedTrades,
                 )
             )
         } catch (e: CancellationException) {
             throw e // never swallow coroutine cancellation
         } catch (e: Exception) {
-            ReportsResult.Error(message = e.message)
-        }
-    }
-
-    /** Direction-aware leg points (mirrors backend analysis._leg_points). null if data missing. */
-    private fun legPoints(direction: String?, entry: Double?, close: Double?): Double? {
-        if (entry == null || close == null) return null
-        return when (direction?.lowercase()) {
-            "long" -> close - entry
-            "short" -> entry - close
-            else -> null // unknown/absent direction: exclude from the trade rather than corrupt it
+            // Generic message — don't surface raw exception text (may carry host/IP).
+            ReportsResult.Error(message = "Network error")
         }
     }
 }
