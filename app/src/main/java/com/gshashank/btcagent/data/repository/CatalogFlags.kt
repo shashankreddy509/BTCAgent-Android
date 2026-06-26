@@ -26,4 +26,13 @@ object CatalogFlags {
      *  OFF/absent = tile hidden (default=false at isEnabledFlow call site; not security-sensitive).
      *  Allocated via BTCWEB-22; live catalog v5, seq 3. */
     const val MARKOV_MATRIX = 100003
+
+    // seq 4 (id 100004) = volume_profile (BTCWEB-26), added on the MOBILE-14 branch — not present
+    // here. The gap below is intentional; this branch only owns seq 5.
+
+    /** liquidity_map — android 100005 / iOS 200005.
+     *  ON  = Markets hub Liquidity Map tile + screen visible.
+     *  OFF/absent = tile hidden (default=false at isEnabledFlow call site; not security-sensitive).
+     *  Allocated via BTCWEB-30; live catalog v7, seq 5. */
+    const val LIQUIDITY_MAP = 100005
 }

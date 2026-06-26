@@ -17,11 +17,14 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * JVM unit tests for [MarketsHubViewModel] — MOBILE-13 (catalog gating) + MOBILE-10 (hub).
+ * JVM unit tests for [MarketsHubViewModel] — MOBILE-13 (catalog gating) + MOBILE-10 (hub)
+ * + MOBILE-15 (Liquidity Map catalog gating).
  *
  * This suite extends the original MOBILE-10 stub tests to add MOBILE-13 catalog gating:
  * the Markov Matrix tile/screen must only be accessible when [CatalogFlags.MARKOV_MATRIX]
  * (id = 100003) is ON.
+ *
+ * MOBILE-15 adds [isLiquidityMapEnabled] gating via [CatalogFlags.LIQUIDITY_MAP] (id = 100005).
  *
  * Uses [FakeCatalogRepository] (hand-written fake) so no DataStore or Firestore is touched.
  * [MainDispatcherRule] installs [kotlinx.coroutines.test.UnconfinedTestDispatcher] as
@@ -34,9 +37,16 @@ import org.junit.Test
  *   - [CatalogFlags.MARKOV_MATRIX] ON → [MarketsHubViewModel.isMarkovEnabled] emits `true`
  *     (tile shown — new behavior).
  *
- * All tests that reference [MarketsHubViewModel.isMarkovEnabled] MUST fail (red) until
- * [MarketsHubViewModel] is updated to accept [CatalogRepository] and expose [isMarkovEnabled].
- * The original 4 MOBILE-10 tests must also fail until the ViewModel re-adopts [CatalogRepository].
+ * **Catalog rollback contract (MOBILE-15)**:
+ *   - [CatalogFlags.LIQUIDITY_MAP] OFF/absent → [MarketsHubViewModel.isLiquidityMapEnabled] emits `false`
+ *     (tile hidden — old/absent behavior).
+ *   - [CatalogFlags.LIQUIDITY_MAP] ON → [MarketsHubViewModel.isLiquidityMapEnabled] emits `true`
+ *     (tile shown — new behavior).
+ *
+ * All tests that reference [MarketsHubViewModel.isMarkovEnabled] or [isLiquidityMapEnabled] MUST
+ * fail (red) until [MarketsHubViewModel] is updated to accept [CatalogRepository] and expose
+ * those flows. The original 4 MOBILE-10 tests must also fail until the ViewModel re-adopts
+ * [CatalogRepository].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class MarketsHubViewModelTest {
@@ -238,6 +248,62 @@ class MarketsHubViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // =========================================================================
+    // MOBILE-15 Catalog gating: isLiquidityMapEnabled defaults to false (flag OFF)
+    //
+    // Rollback contract: when LIQUIDITY_MAP flag is OFF/absent the Liquidity Map tile must
+    // be hidden — this is the OLD/absent behavior (feature not shown).
+    // =========================================================================
+
+    @Test
+    fun `isLiquidityMapEnabled emits false when LIQUIDITY_MAP catalog flag is OFF`() = runTest {
+        // Flag OFF — the default absent behavior; tile must be hidden.
+        fakeCatalog.liquidityMapEnabled = false
+
+        val viewModel = createViewModel()
+
+        viewModel.isLiquidityMapEnabled.test {
+            advanceUntilIdle()
+
+            val emission = awaitItem()
+            assertFalse(
+                "isLiquidityMapEnabled must emit false when CatalogFlags.LIQUIDITY_MAP (id=100005) is OFF — " +
+                    "Liquidity Map tile must not be accessible in the hub",
+                emission,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // =========================================================================
+    // MOBILE-15 Catalog gating: isLiquidityMapEnabled becomes true when flag is ON
+    //
+    // Rollback contract: when LIQUIDITY_MAP flag is ON the Liquidity Map tile must be
+    // visible — this is the NEW behavior (feature shown).
+    // =========================================================================
+
+    @Test
+    fun `isLiquidityMapEnabled emits true when LIQUIDITY_MAP catalog flag is ON`() = runTest {
+        // Flag ON — the new Liquidity Map screen is accessible.
+        fakeCatalog.liquidityMapEnabled = true
+
+        val viewModel = createViewModel()
+
+        viewModel.isLiquidityMapEnabled.test {
+            advanceUntilIdle()
+
+            val emission = awaitItem()
+            assertTrue(
+                "isLiquidityMapEnabled must emit true when CatalogFlags.LIQUIDITY_MAP (id=100005) is ON — " +
+                    "Liquidity Map tile must be accessible in the hub",
+                emission,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
 
 // =============================================================================
@@ -249,6 +315,9 @@ class MarketsHubViewModelTest {
  *
  * [markovMatrixEnabled] controls the sync [isEnabled] response for [CatalogFlags.MARKOV_MATRIX].
  * [markovMatrixFlow] controls the [isEnabledFlow] response; defaults to [flowOf(markovMatrixEnabled)].
+ * [liquidityMapEnabled] controls the sync [isEnabled] response for [CatalogFlags.LIQUIDITY_MAP].
+ * [liquidityMapFlow] controls the [isEnabledFlow] response for LIQUIDITY_MAP; defaults to
+ * [flowOf(liquidityMapEnabled)].
  * All other flags default to `false`.
  */
 private class FakeCatalogRepository : CatalogRepository {
@@ -258,6 +327,11 @@ private class FakeCatalogRepository : CatalogRepository {
     /** Override this to supply a multi-emission flow (e.g. for the toggling test). */
     var markovMatrixFlow: Flow<Boolean>? = null
 
+    var liquidityMapEnabled: Boolean = false
+
+    /** Override this to supply a multi-emission flow for LIQUIDITY_MAP. */
+    var liquidityMapFlow: Flow<Boolean>? = null
+
     override suspend fun refresh() {
         // No-op in tests — tests configure the result directly.
     }
@@ -266,16 +340,21 @@ private class FakeCatalogRepository : CatalogRepository {
         if (id == CatalogFlags.MARKOV_MATRIX) {
             return markovMatrixFlow ?: flowOf(markovMatrixEnabled)
         }
+        if (id == CatalogFlags.LIQUIDITY_MAP) {
+            return liquidityMapFlow ?: flowOf(liquidityMapEnabled)
+        }
         return flowOf(default)
     }
 
     override fun isEnabled(id: Int): Boolean {
         if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
+        if (id == CatalogFlags.LIQUIDITY_MAP) return liquidityMapEnabled
         return false
     }
 
     override fun isEnabled(id: Int, default: Boolean): Boolean {
         if (id == CatalogFlags.MARKOV_MATRIX) return markovMatrixEnabled
+        if (id == CatalogFlags.LIQUIDITY_MAP) return liquidityMapEnabled
         return default
     }
 }

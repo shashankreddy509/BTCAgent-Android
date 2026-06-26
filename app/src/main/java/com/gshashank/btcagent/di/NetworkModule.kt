@@ -5,6 +5,7 @@ import com.gshashank.btcagent.data.network.AccessApi
 import com.gshashank.btcagent.data.network.BriefingApi
 import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.DashboardApi
+import com.gshashank.btcagent.data.network.LiquidityApi
 import com.gshashank.btcagent.data.network.MarkovApi
 import com.gshashank.btcagent.data.network.OpenInterestApi
 import com.gshashank.btcagent.data.network.PositionsApi
@@ -163,6 +164,11 @@ object NetworkModule {
     @Singleton
     fun provideMarkovApi(retrofit: Retrofit): MarkovApi =
         retrofit.create(MarkovApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideLiquidityApi(retrofit: Retrofit): LiquidityApi =
+        retrofit.create(LiquidityApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.
