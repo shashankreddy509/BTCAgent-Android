@@ -15,6 +15,7 @@ import com.gshashank.btcagent.data.network.ReportsApi
 import com.gshashank.btcagent.data.network.ScannerApi
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import com.gshashank.btcagent.data.network.AuthInterceptor
+import com.gshashank.btcagent.data.network.TradingControlApi
 import com.gshashank.btcagent.data.network.VolumeProfileApi
 import dagger.Module
 import dagger.Provides
@@ -175,6 +176,12 @@ object NetworkModule {
     @Singleton
     fun provideVolumeProfileApi(@Named("public") retrofit: Retrofit): VolumeProfileApi =
         retrofit.create(VolumeProfileApi::class.java)
+
+    // TradingControlApi uses the AUTHENTICATED Retrofit — trading endpoints require the Firebase token.
+    @Provides
+    @Singleton
+    fun provideTradingControlApi(retrofit: Retrofit): TradingControlApi =
+        retrofit.create(TradingControlApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.

@@ -36,4 +36,5 @@ data class TradeResultDto(
 @Serializable
 data class SettingsDto(
     val mode: String = "paper",
+    @SerialName("depo_entry_filter") val depoEntryFilter: Boolean = false,
 )
