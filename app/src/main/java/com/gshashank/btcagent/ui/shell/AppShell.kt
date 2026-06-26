@@ -36,6 +36,7 @@ import com.gshashank.btcagent.ui.reports.ReportsScreen
 import com.gshashank.btcagent.ui.scanner.ScannerScreen
 import com.gshashank.btcagent.ui.settings.SettingsScreen
 import com.gshashank.btcagent.ui.trade.TradingControlScreen
+import com.gshashank.btcagent.ui.trade.manual.ManualEntryScreen
 
 @Composable
 fun AppShell() {
@@ -126,7 +127,12 @@ fun AppShell() {
                 }
             }
             navigation<TabGraph.Trade>(startDestination = TradeTab.Hub::class) {
-                composable<TradeTab.Hub> { TradingControlScreen() }
+                composable<TradeTab.Hub> {
+                    TradingControlScreen(navController = navController)
+                }
+                composable<TradeTab.ManualEntry> {
+                    ManualEntryScreen(navController = navController)
+                }
             }
             navigation<TabGraph.Reports>(startDestination = ReportsTab.Hub::class) {
                 composable<ReportsTab.Hub> { ReportsScreen() }

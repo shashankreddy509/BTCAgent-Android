@@ -16,6 +16,8 @@ import com.gshashank.btcagent.data.repository.DashboardRepository
 import com.gshashank.btcagent.data.repository.DashboardRepositoryImpl
 import com.gshashank.btcagent.data.repository.LiquidityRepository
 import com.gshashank.btcagent.data.repository.LiquidityRepositoryImpl
+import com.gshashank.btcagent.data.repository.ManualEntryRepository
+import com.gshashank.btcagent.data.repository.ManualEntryRepositoryImpl
 import com.gshashank.btcagent.data.repository.MarkovRepository
 import com.gshashank.btcagent.data.repository.MarkovRepositoryImpl
 import com.gshashank.btcagent.data.repository.OpenInterestRepository
@@ -112,4 +114,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTradingControlRepository(impl: TradingControlRepositoryImpl): TradingControlRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindManualEntryRepository(impl: ManualEntryRepositoryImpl): ManualEntryRepository
 }

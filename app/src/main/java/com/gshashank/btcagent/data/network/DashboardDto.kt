@@ -10,6 +10,7 @@ data class TradingStateDto(
     val history: List<TradeResultDto> = emptyList(),
     val settings: SettingsDto,
     @SerialName("current_price") val currentPrice: Double = 0.0,
+    @SerialName("manual_pending") val manualPending: List<ManualPendingDto> = emptyList(),
 )
 
 @Serializable
@@ -37,4 +38,15 @@ data class TradeResultDto(
 data class SettingsDto(
     val mode: String = "paper",
     @SerialName("depo_entry_filter") val depoEntryFilter: Boolean = false,
+)
+
+@Serializable
+data class ManualPendingDto(
+    val id: String,
+    val direction: String,
+    val qty: Double,
+    @SerialName("limit_price") val limitPrice: Double,
+    val sl: Double,
+    val tp: Double? = null,
+    @SerialName("created_at") val createdAt: String,
 )

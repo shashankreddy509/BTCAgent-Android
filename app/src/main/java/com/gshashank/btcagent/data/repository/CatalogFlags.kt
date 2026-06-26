@@ -44,4 +44,10 @@ object CatalogFlags {
      *  OFF/absent = tile hidden (default=false at isEnabledFlow call site; not security-sensitive).
      *  Allocated via BTCWEB-31; live catalog v8, seq 6. */
     const val ANALYTICS = 100006
+
+    /** manual_entry — android 100007 / iOS 200007.
+     *  ON  = Manual Entry tile + order form screen visible; OFF/absent = hidden.
+     *  default=false (not security-sensitive — hidden is the safe fallback).
+     *  Allocated via BTCWEB-37 (Done); live catalog v9, seq 7. */
+    const val MANUAL_ENTRY = 100007
 }

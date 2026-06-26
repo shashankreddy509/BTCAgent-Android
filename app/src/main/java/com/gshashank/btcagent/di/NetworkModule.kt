@@ -6,6 +6,7 @@ import com.gshashank.btcagent.data.network.BriefingApi
 import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.DashboardApi
 import com.gshashank.btcagent.data.network.LiquidityApi
+import com.gshashank.btcagent.data.network.ManualEntryApi
 import com.gshashank.btcagent.data.network.MarkovApi
 import com.gshashank.btcagent.data.network.OpenInterestApi
 import com.gshashank.btcagent.data.network.PositionsApi
@@ -182,6 +183,12 @@ object NetworkModule {
     @Singleton
     fun provideTradingControlApi(retrofit: Retrofit): TradingControlApi =
         retrofit.create(TradingControlApi::class.java)
+
+    // ManualEntryApi uses the AUTHENTICATED Retrofit — manual trading endpoints require the token.
+    @Provides
+    @Singleton
+    fun provideManualEntryApi(retrofit: Retrofit): ManualEntryApi =
+        retrofit.create(ManualEntryApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.

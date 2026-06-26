@@ -31,11 +31,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import com.gshashank.btcagent.data.model.ExecutionMode
 import com.gshashank.btcagent.data.model.Position
 import com.gshashank.btcagent.data.model.TradingControlData
 import com.gshashank.btcagent.ui.components.state.ActionResultUiState
 import com.gshashank.btcagent.ui.components.state.UiState
+import com.gshashank.btcagent.ui.navigation.TradeTab
+import com.gshashank.btcagent.ui.trade.manual.ManualEntryFlagViewModel
 
 /**
  * Trading Control screen — MOBILE-18.
@@ -43,15 +46,21 @@ import com.gshashank.btcagent.ui.components.state.UiState
  * Shows scanner Start/Stop, execution mode (PAPER/LIVE with confirm dialog on LIVE switch),
  * DEPO alerts toggle, and open positions with Close buttons.
  *
+ * MOBILE-19: Catalog-gated "Manual Entry" button (CatalogFlags.MANUAL_ENTRY = 100007) navigates
+ * to [TradeTab.ManualEntry]. The flag is read reactively via [ManualEntryFlagViewModel].
+ *
  * testTag("screen_trade") is on the root container to support UI automation.
  */
 @Composable
 fun TradingControlScreen(
+    navController: NavController? = null,
     viewModel: TradingControlViewModel = hiltViewModel(),
+    flagViewModel: ManualEntryFlagViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val actionResult by viewModel.actionResult.collectAsStateWithLifecycle()
     val pendingLiveMode by viewModel.pendingLiveMode.collectAsStateWithLifecycle()
+    val manualEntryEnabled by flagViewModel.manualEntryEnabled.collectAsStateWithLifecycle()
 
     // LIVE confirm dialog
     if (pendingLiveMode) {
@@ -105,6 +114,8 @@ fun TradingControlScreen(
                     onSetMode = { mode -> viewModel.setMode(mode) },
                     onSetDepoAlerts = { enabled -> viewModel.setDepoAlerts(enabled) },
                     onClose = { signalId -> viewModel.close(signalId) },
+                    manualEntryEnabled = manualEntryEnabled,
+                    onManualEntry = navController?.let { nav -> { nav.navigate(TradeTab.ManualEntry) } },
                 )
             }
 
@@ -141,6 +152,8 @@ private fun TradingControlContent(
     onSetMode: (ExecutionMode) -> Unit,
     onSetDepoAlerts: (Boolean) -> Unit,
     onClose: (String) -> Unit,
+    manualEntryEnabled: Boolean = false,
+    onManualEntry: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -215,6 +228,16 @@ private fun TradingControlContent(
                     checked = data.depoAlertsEnabled,
                     onCheckedChange = onSetDepoAlerts,
                 )
+            }
+        }
+
+        // Manual Entry button — catalog-gated (CatalogFlags.MANUAL_ENTRY = 100007)
+        if (manualEntryEnabled && onManualEntry != null) {
+            Button(
+                onClick = onManualEntry,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Manual Entry")
             }
         }
 
