@@ -1,5 +1,7 @@
 package com.gshashank.btcagent.ui.settings
 
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,11 +11,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -22,12 +27,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.gshashank.btcagent.data.model.ColorTheme
 import com.gshashank.btcagent.data.model.UserSettings
 import com.gshashank.btcagent.ui.components.state.UiState
+import com.gshashank.btcagent.ui.theme.BtcAccent
+import com.gshashank.btcagent.ui.theme.CobaltAccent
+import com.gshashank.btcagent.ui.theme.VioletAccent
 
 @Composable
 fun SettingsScreen(
@@ -37,6 +48,7 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val actionResult by viewModel.actionResult.collectAsStateWithLifecycle()
     val darkMode by viewModel.darkMode.collectAsStateWithLifecycle()
+    val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.navigateToLogin.collect {
@@ -74,7 +86,9 @@ fun SettingsScreen(
                 SettingsContent(
                     settings = settings,
                     darkMode = darkMode,
+                    colorTheme = colorTheme,
                     onSetDarkMode = { viewModel.setDarkMode(it) },
+                    onSetColorTheme = { viewModel.setColorTheme(it) },
                     onSave = { qty, maxSl, minTp, maxConcurrent ->
                         viewModel.saveTradingParams(
                             qty = qty,
@@ -96,7 +110,9 @@ fun SettingsScreen(
 private fun SettingsContent(
     settings: UserSettings,
     darkMode: Boolean,
+    colorTheme: ColorTheme,
     onSetDarkMode: (Boolean) -> Unit,
+    onSetColorTheme: (ColorTheme) -> Unit,
     onSave: (Int?, Double?, Double?, Int?) -> Unit,
     onSignOut: () -> Unit,
 ) {
@@ -120,6 +136,11 @@ private fun SettingsContent(
                     Text("Dark Mode")
                     Switch(checked = darkMode, onCheckedChange = { onSetDarkMode(it) })
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+                ColorThemeSwatch(
+                    selectedTheme = colorTheme,
+                    onSelectTheme = onSetColorTheme,
+                )
             }
         }
 
@@ -186,6 +207,52 @@ private fun SettingsContent(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Sign Out")
+        }
+    }
+}
+
+/**
+ * 3-circle swatch row for picking a color theme skin.
+ * Each circle uses the skin's accent color. The selected circle has a ring border.
+ * Tapping a circle calls [onSelectTheme] with the chosen [ColorTheme].
+ */
+@Composable
+private fun ColorThemeSwatch(
+    selectedTheme: ColorTheme,
+    onSelectTheme: (ColorTheme) -> Unit,
+) {
+    val swatches = listOf(
+        ColorTheme.BITCOIN to BtcAccent,
+        ColorTheme.COBALT to CobaltAccent,
+        ColorTheme.VIOLET to VioletAccent,
+    )
+
+    val ringColor = MaterialTheme.colorScheme.onBackground
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        swatches.forEach { (theme, accentColor) ->
+            val isSelected = theme == selectedTheme
+            // Outer Box is the 48dp touch target; the visible swatch is the inner 32dp circle.
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .clickable { onSelectTheme(theme) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .then(
+                            if (isSelected) {
+                                Modifier.border(width = 2.dp, color = ringColor, shape = CircleShape)
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .drawBehind { drawCircle(color = accentColor) },
+                )
+            }
         }
     }
 }

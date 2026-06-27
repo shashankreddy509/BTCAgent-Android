@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.gshashank.btcagent.data.model.ColorTheme
 import com.gshashank.btcagent.data.repository.AppearanceRepository
 import com.gshashank.btcagent.ui.MainViewModel
 import com.gshashank.btcagent.ui.auth.LoginScreen
@@ -40,7 +41,10 @@ class MainActivity : FragmentActivity() {
             val darkTheme by appearanceRepository.darkModeFlow.collectAsStateWithLifecycle(
                 initialValue = false,
             )
-            BTCAgentTheme(darkTheme = darkTheme) {
+            val colorTheme by appearanceRepository.colorThemeFlow.collectAsStateWithLifecycle(
+                initialValue = ColorTheme.BITCOIN,
+            )
+            BTCAgentTheme(darkTheme = darkTheme, colorTheme = colorTheme) {
                 // Surface paints the themed background under every screen — MaterialTheme
                 // only sets color tokens, it does not draw a background itself.
                 Surface(

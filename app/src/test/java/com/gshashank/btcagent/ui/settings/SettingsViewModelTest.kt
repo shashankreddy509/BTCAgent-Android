@@ -52,6 +52,8 @@ import org.junit.Test
  *   8.  Sign out → calls AuthRepository.signOut() + navigateToLogin emits
  *   9.  Double-tap guard on save: second tap while in-flight is ignored
  *   10. Masked broker key is present read-only in uiState (never sent back via saveTradingParams)
+ *   11. setColorTheme(COBALT) → calls AppearanceRepository.setColorTheme with ColorTheme.COBALT
+ *   12. setColorTheme(VIOLET) → calls AppearanceRepository.setColorTheme with ColorTheme.VIOLET
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -504,6 +506,76 @@ class SettingsViewModelTest {
                 modeStr.contains("****"),
             )
         }
+
+    // =========================================================================
+    // 11. setColorTheme(COBALT) → calls AppearanceRepository.setColorTheme(COBALT)
+    //     and colorTheme StateFlow reflects COBALT — MOBILE-25
+    // =========================================================================
+
+    @Test
+    fun `setColorTheme COBALT calls AppearanceRepository setColorTheme with ColorTheme COBALT`() =
+        runTest {
+            fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val setColorThemeCallsBefore = fakeAppearanceRepo.setColorThemeCallCount
+
+            viewModel.setColorTheme(ColorTheme.COBALT)
+            advanceUntilIdle()
+
+            assertEquals(
+                "setColorTheme(COBALT) must call AppearanceRepository.setColorTheme exactly once",
+                setColorThemeCallsBefore + 1,
+                fakeAppearanceRepo.setColorThemeCallCount,
+            )
+            assertEquals(
+                "AppearanceRepository.setColorTheme must be called with ColorTheme.COBALT",
+                ColorTheme.COBALT,
+                fakeAppearanceRepo.lastColorThemeValue,
+            )
+            assertEquals(
+                "colorTheme StateFlow must emit ColorTheme.COBALT after setColorTheme(COBALT)",
+                ColorTheme.COBALT,
+                viewModel.colorTheme.value,
+            )
+        }
+
+    // =========================================================================
+    // 12. setColorTheme(VIOLET) → calls AppearanceRepository.setColorTheme(VIOLET)
+    //     and colorTheme StateFlow reflects VIOLET — MOBILE-25
+    // =========================================================================
+
+    @Test
+    fun `setColorTheme VIOLET calls AppearanceRepository setColorTheme with ColorTheme VIOLET`() =
+        runTest {
+            fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val setColorThemeCallsBefore = fakeAppearanceRepo.setColorThemeCallCount
+
+            viewModel.setColorTheme(ColorTheme.VIOLET)
+            advanceUntilIdle()
+
+            assertEquals(
+                "setColorTheme(VIOLET) must call AppearanceRepository.setColorTheme exactly once",
+                setColorThemeCallsBefore + 1,
+                fakeAppearanceRepo.setColorThemeCallCount,
+            )
+            assertEquals(
+                "AppearanceRepository.setColorTheme must be called with ColorTheme.VIOLET",
+                ColorTheme.VIOLET,
+                fakeAppearanceRepo.lastColorThemeValue,
+            )
+            assertEquals(
+                "colorTheme StateFlow must emit ColorTheme.VIOLET after setColorTheme(VIOLET)",
+                ColorTheme.VIOLET,
+                viewModel.colorTheme.value,
+            )
+        }
 }
 
 // =============================================================================
@@ -562,6 +634,10 @@ private class FakeSettingsRepository : SettingsRepository {
 /**
  * Hand-written fake [AppearanceRepository].
  * Backed by [MutableStateFlow]s so Flow-based tests can observe reactive updates.
+ *
+ * Extended in MOBILE-25 to track [lastColorThemeValue] — the value argument passed to the most
+ * recent [setColorTheme] call. Tests assert referential identity to confirm the correct enum
+ * constant was forwarded.
  */
 private class FakeAppearanceRepository : AppearanceRepository {
 
@@ -577,7 +653,11 @@ private class FakeAppearanceRepository : AppearanceRepository {
 
     var setDarkModeCallCount: Int = 0
     var lastDarkModeValue: Boolean? = null
+
     var setColorThemeCallCount: Int = 0
+    /** The [ColorTheme] value passed to the most recent [setColorTheme] call. Null if never called. */
+    var lastColorThemeValue: ColorTheme? = null
+
     var setDashboardLayoutCallCount: Int = 0
     var setBiometricUnlockCallCount: Int = 0
 
@@ -589,6 +669,7 @@ private class FakeAppearanceRepository : AppearanceRepository {
 
     override suspend fun setColorTheme(theme: ColorTheme) {
         setColorThemeCallCount++
+        lastColorThemeValue = theme
         _colorTheme.value = theme
     }
 
