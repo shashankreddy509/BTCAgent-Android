@@ -2,6 +2,7 @@ package com.gshashank.btcagent.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gshashank.btcagent.data.model.ColorTheme
 import com.gshashank.btcagent.data.model.ExecutionMode
 import com.gshashank.btcagent.data.model.UserSettings
 import com.gshashank.btcagent.data.repository.ActionResult
@@ -32,6 +33,8 @@ import javax.inject.Inject
  * - [uiState] — Loading → Ready/Error after fetch.
  * - [actionResult] — nullable one-shot write feedback (snackbar).
  * - [navigateToLogin] — emits Unit when sign-out completes.
+ * - [darkMode] — persisted dark-mode preference.
+ * - [colorTheme] — persisted color theme preference (MOBILE-25).
  *
  * Double-tap guard: [saveJob] prevents concurrent in-flight save calls.
  * Validation errors (qty) are surfaced immediately via actionResult without an HTTP call.
@@ -59,6 +62,14 @@ class SettingsViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = false,
+        )
+
+    /** Persisted color theme preference — MOBILE-25. */
+    val colorTheme: StateFlow<ColorTheme> = appearanceRepository.colorThemeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = ColorTheme.BITCOIN,
         )
 
     private var saveJob: Job? = null
@@ -124,6 +135,13 @@ class SettingsViewModel @Inject constructor(
     fun setDarkMode(enabled: Boolean) {
         viewModelScope.launch {
             appearanceRepository.setDarkMode(enabled)
+        }
+    }
+
+    /** Persists the selected [theme] — MOBILE-25. */
+    fun setColorTheme(theme: ColorTheme) {
+        viewModelScope.launch {
+            appearanceRepository.setColorTheme(theme)
         }
     }
 

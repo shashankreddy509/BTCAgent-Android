@@ -17,7 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.gshashank.btcagent.ui.theme.MonoFontFamily
+import com.gshashank.btcagent.ui.theme.LocalMonoFontFamily
 
 /**
  * Full-screen error state shown when [UiState.Error] is active.
@@ -27,8 +27,8 @@ import com.gshashank.btcagent.ui.theme.MonoFontFamily
  * used without adding a new dependency. A text placeholder keeps the kit dependency-free
  * while making the tests pass (tests verify text content/error code, not icon presence).
  *
- * The error code is displayed in a chip using [MonoFontFamily] (RobotoMono), which is
- * already declared in ui/theme/Type.kt.
+ * The error code is displayed in a chip using [LocalMonoFontFamily] so the active skin's
+ * mono font is used (wired via CompositionLocal in BTCAgentTheme — MOBILE-25).
  *
  * @param message   Human-readable headline (e.g. "Couldn't load data" or a server-supplied label).
  * @param errorCode Machine-readable code shown in the mono chip (e.g. "ERR_503").
@@ -70,7 +70,7 @@ fun ErrorStateContent(
             Text(
                 text = errorCode,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = MonoFontFamily,
+                    fontFamily = LocalMonoFontFamily.current,
                 ),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             )
