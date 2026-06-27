@@ -32,6 +32,7 @@ class AppearanceRepositoryImpl @Inject constructor(
         private val KEY_COLOR_THEME = stringPreferencesKey("color_theme")
         private val KEY_DASHBOARD_LAYOUT = stringPreferencesKey("dashboard_layout")
         private val KEY_BIOMETRIC_UNLOCK = booleanPreferencesKey("biometric_unlock")
+        private val KEY_ONBOARDING_SEEN = booleanPreferencesKey("has_seen_onboarding")
     }
 
     override val darkModeFlow: Flow<Boolean> =
@@ -68,6 +69,9 @@ class AppearanceRepositoryImpl @Inject constructor(
     override val biometricUnlockFlow: Flow<Boolean> =
         dataStore.data.map { prefs -> prefs[KEY_BIOMETRIC_UNLOCK] ?: false }
 
+    override val hasSeenOnboardingFlow: Flow<Boolean> =
+        dataStore.data.map { prefs -> prefs[KEY_ONBOARDING_SEEN] ?: false }
+
     override suspend fun setDarkMode(enabled: Boolean) {
         dataStore.edit { it[KEY_DARK_MODE] = enabled }
     }
@@ -82,5 +86,9 @@ class AppearanceRepositoryImpl @Inject constructor(
 
     override suspend fun setBiometricUnlock(enabled: Boolean) {
         dataStore.edit { it[KEY_BIOMETRIC_UNLOCK] = enabled }
+    }
+
+    override suspend fun setHasSeenOnboarding(seen: Boolean) {
+        dataStore.edit { it[KEY_ONBOARDING_SEEN] = seen }
     }
 }

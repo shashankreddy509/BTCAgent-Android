@@ -3,13 +3,16 @@ package com.gshashank.btcagent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -21,6 +24,7 @@ import com.gshashank.btcagent.ui.MainViewModel
 import com.gshashank.btcagent.ui.auth.LoginScreen
 import com.gshashank.btcagent.ui.gate.GateScreen
 import com.gshashank.btcagent.ui.navigation.Route
+import com.gshashank.btcagent.ui.onboarding.OnboardingScreen
 import com.gshashank.btcagent.ui.shell.AppShell
 import com.gshashank.btcagent.ui.theme.BTCAgentTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -60,19 +64,41 @@ class MainActivity : FragmentActivity() {
 
 @Composable
 private fun AppNavHost(viewModel: MainViewModel = hiltViewModel()) {
+    // MOBILE-23: startDestination is null until the DataStore + Firebase session resolves.
+    // Null-guard first — NavController is not created until resolution, saving slot-table entries.
+    val startDestination by viewModel.startDestination.collectAsStateWithLifecycle()
+    val resolvedStart = startDestination ?: return // parent Surface shows themed background
+
     val navController = rememberNavController()
 
     NavHost(
         navController = navController,
-        // MOBILE-33: start past Login when a persisted Firebase session exists.
-        startDestination = viewModel.startDestination,
+        // MOBILE-33/MOBILE-23: start past Login when a persisted Firebase session exists;
+        // show Onboarding on first launch.
+        startDestination = resolvedStart,
     ) {
+        composable<Route.Onboarding> {
+            // Single-fire guard: prevents double-navigate if taps race before recomposition.
+            var finished by remember { mutableStateOf(false) }
+            OnboardingScreen(
+                onFinish = {
+                    if (!finished) {
+                        finished = true
+                        viewModel.markOnboardingSeen()
+                        navController.navigate(Route.Login) {
+                            popUpTo<Route.Onboarding> { inclusive = true }
+                        }
+                    }
+                },
+            )
+        }
+
         composable<Route.Login> {
             LoginScreen(
                 viewModel = hiltViewModel(),
                 onAuthenticated = {
                     navController.navigate(Route.Gate) {
-                        popUpTo(Route.Login) { inclusive = true }
+                        popUpTo<Route.Login> { inclusive = true }
                     }
                 },
             )
@@ -83,7 +109,7 @@ private fun AppNavHost(viewModel: MainViewModel = hiltViewModel()) {
                 viewModel = hiltViewModel(),
                 onAllowed = {
                     navController.navigate(Route.Home) {
-                        popUpTo(Route.Gate) { inclusive = true }
+                        popUpTo<Route.Gate> { inclusive = true }
                     }
                 },
                 onSignedOut = {
