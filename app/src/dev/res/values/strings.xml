@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dev flavor app label — distinguishes the dev install from prod on the launcher. -->
+    <string name="app_name">BTC Agent Dev</string>
+</resources>
