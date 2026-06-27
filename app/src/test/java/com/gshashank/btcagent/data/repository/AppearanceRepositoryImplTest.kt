@@ -21,7 +21,7 @@ import java.io.File
 import java.util.UUID
 
 /**
- * JVM unit tests for [AppearanceRepositoryImpl] — MOBILE-20.
+ * JVM unit tests for [AppearanceRepositoryImpl] — MOBILE-20 / MOBILE-23.
  *
  * Uses a real [DataStore]<[Preferences]> backed by a unique temporary directory per test
  * (same pattern as [CatalogRepositoryImplTest]). This avoids the need for Android mocks and
@@ -32,6 +32,9 @@ import java.util.UUID
  *   - colorTheme    (ColorTheme enum, default = ColorTheme.BITCOIN)
  *   - dashboardLayout (DashboardLayout enum, default = DashboardLayout.HERO)
  *   - biometricUnlock (Boolean, default = false)
+ *
+ * MOBILE-23 adds:
+ *   - hasSeenOnboarding (Boolean, default = false, key "has_seen_onboarding")
  *
  * All tests MUST fail (red) until [AppearanceRepositoryImpl] is implemented.
  *
@@ -45,6 +48,8 @@ import java.util.UUID
  *   7.  Default colorTheme = BITCOIN when DataStore is empty
  *   8.  Default dashboardLayout = HERO when DataStore is empty
  *   9.  Default biometricUnlock = false when DataStore is empty
+ *   10. hasSeenOnboardingFlow defaults to false when DataStore is empty (MOBILE-23)
+ *   11. setHasSeenOnboarding(true) → hasSeenOnboardingFlow emits true (MOBILE-23)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppearanceRepositoryImplTest {
@@ -307,6 +312,39 @@ class AppearanceRepositoryImplTest {
         assertFalse(
             "biometricUnlockFlow must default to false when the DataStore has no persisted value",
             biometric,
+        )
+    }
+
+    // =========================================================================
+    // 10. hasSeenOnboardingFlow defaults to false when DataStore is empty — MOBILE-23
+    // =========================================================================
+
+    @Test
+    fun `hasSeenOnboardingFlow defaults false when DataStore is empty`() = testScope.runTest {
+        advanceUntilIdle()
+
+        val hasSeen = repository.hasSeenOnboardingFlow.first()
+
+        assertFalse(
+            "hasSeenOnboardingFlow must default to false on a fresh DataStore (first launch shows onboarding)",
+            hasSeen,
+        )
+    }
+
+    // =========================================================================
+    // 11. setHasSeenOnboarding(true) → hasSeenOnboardingFlow emits true — MOBILE-23
+    // =========================================================================
+
+    @Test
+    fun `setHasSeenOnboarding true emits true`() = testScope.runTest {
+        repository.setHasSeenOnboarding(true)
+        advanceUntilIdle()
+
+        val hasSeen = repository.hasSeenOnboardingFlow.first()
+
+        assertTrue(
+            "hasSeenOnboardingFlow must emit true after setHasSeenOnboarding(true) — onboarding must not re-show",
+            hasSeen,
         )
     }
 }

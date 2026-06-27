@@ -650,6 +650,7 @@ private class FakeAppearanceRepository : AppearanceRepository {
     override val colorThemeFlow: Flow<ColorTheme> = _colorTheme
     override val dashboardLayoutFlow: Flow<DashboardLayout> = _dashboardLayout
     override val biometricUnlockFlow: Flow<Boolean> = _biometricUnlock
+    override val hasSeenOnboardingFlow: Flow<Boolean> = MutableStateFlow(false)
 
     var setDarkModeCallCount: Int = 0
     var lastDarkModeValue: Boolean? = null
@@ -682,6 +683,8 @@ private class FakeAppearanceRepository : AppearanceRepository {
         setBiometricUnlockCallCount++
         _biometricUnlock.value = enabled
     }
+
+    override suspend fun setHasSeenOnboarding(seen: Boolean) = Unit
 }
 
 /**
