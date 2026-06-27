@@ -41,4 +41,5 @@ sealed interface ReportsTab {
 
 sealed interface SettingsTab {
     @Serializable data object Hub : SettingsTab
+    @Serializable data object Users : SettingsTab
 }

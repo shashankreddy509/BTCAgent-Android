@@ -36,6 +36,8 @@ import com.gshashank.btcagent.data.repository.SettingsRepository
 import com.gshashank.btcagent.data.repository.SettingsRepositoryImpl
 import com.gshashank.btcagent.data.repository.TradingControlRepository
 import com.gshashank.btcagent.data.repository.TradingControlRepositoryImpl
+import com.gshashank.btcagent.data.repository.UsersRepository
+import com.gshashank.btcagent.data.repository.UsersRepositoryImpl
 import com.gshashank.btcagent.data.repository.VolumeProfileRepository
 import com.gshashank.btcagent.data.repository.VolumeProfileRepositoryImpl
 import dagger.Binds
@@ -130,4 +132,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAppearanceRepository(impl: AppearanceRepositoryImpl): AppearanceRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUsersRepository(impl: UsersRepositoryImpl): UsersRepository
 }
