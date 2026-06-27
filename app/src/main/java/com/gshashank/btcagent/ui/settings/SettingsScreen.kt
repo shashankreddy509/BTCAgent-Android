@@ -35,6 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gshashank.btcagent.data.model.ColorTheme
 import com.gshashank.btcagent.data.model.UserSettings
+import com.gshashank.btcagent.ui.admin.AdminAccessViewModel
 import com.gshashank.btcagent.ui.components.state.UiState
 import com.gshashank.btcagent.ui.theme.BtcAccent
 import com.gshashank.btcagent.ui.theme.CobaltAccent
@@ -43,12 +44,15 @@ import com.gshashank.btcagent.ui.theme.VioletAccent
 @Composable
 fun SettingsScreen(
     onSignedOut: () -> Unit = {},
+    onNavigateToUsers: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
+    adminAccessViewModel: AdminAccessViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val actionResult by viewModel.actionResult.collectAsStateWithLifecycle()
     val darkMode by viewModel.darkMode.collectAsStateWithLifecycle()
     val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
+    val isAdmin by adminAccessViewModel.isAdmin.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.navigateToLogin.collect {
@@ -87,6 +91,7 @@ fun SettingsScreen(
                     settings = settings,
                     darkMode = darkMode,
                     colorTheme = colorTheme,
+                    isAdmin = isAdmin,
                     onSetDarkMode = { viewModel.setDarkMode(it) },
                     onSetColorTheme = { viewModel.setColorTheme(it) },
                     onSave = { qty, maxSl, minTp, maxConcurrent ->
@@ -99,6 +104,7 @@ fun SettingsScreen(
                         )
                     },
                     onSignOut = { viewModel.signOut() },
+                    onNavigateToUsers = onNavigateToUsers,
                 )
             }
             else -> Unit
@@ -111,10 +117,12 @@ private fun SettingsContent(
     settings: UserSettings,
     darkMode: Boolean,
     colorTheme: ColorTheme,
+    isAdmin: Boolean,
     onSetDarkMode: (Boolean) -> Unit,
     onSetColorTheme: (ColorTheme) -> Unit,
     onSave: (Int?, Double?, Double?, Int?) -> Unit,
     onSignOut: () -> Unit,
+    onNavigateToUsers: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -197,6 +205,25 @@ private fun SettingsContent(
                     settings.brokerKeys.forEach { key ->
                         Text(key)
                     }
+                }
+            }
+        }
+
+        // Admin-gated "Manage Users" row — visible only when isAdmin==true
+        if (isAdmin) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToUsers() },
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Manage Users")
                 }
             }
         }

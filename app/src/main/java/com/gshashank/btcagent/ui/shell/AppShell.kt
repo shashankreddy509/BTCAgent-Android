@@ -5,6 +5,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -14,6 +16,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.gshashank.btcagent.ui.admin.AdminAccessViewModel
+import com.gshashank.btcagent.ui.admin.UsersScreen
 import com.gshashank.btcagent.ui.home.HomeTabScreen
 import com.gshashank.btcagent.ui.markets.MarketsHubScreen
 import com.gshashank.btcagent.ui.markets.analytics.AnalyticsScreen
@@ -139,7 +143,15 @@ fun AppShell(onSignedOut: () -> Unit = {}) {
             }
             navigation<TabGraph.Settings>(startDestination = SettingsTab.Hub::class) {
                 composable<SettingsTab.Hub> {
-                    SettingsScreen(onSignedOut = onSignedOut)
+                    SettingsScreen(
+                        onSignedOut = onSignedOut,
+                        onNavigateToUsers = { navController.navigate(SettingsTab.Users) },
+                    )
+                }
+                composable<SettingsTab.Users> {
+                    val adminAccessViewModel: AdminAccessViewModel = hiltViewModel()
+                    val isAdmin by adminAccessViewModel.isAdmin.collectAsStateWithLifecycle()
+                    UsersScreen(isAdmin = isAdmin)
                 }
             }
         }

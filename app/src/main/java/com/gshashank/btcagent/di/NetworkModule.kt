@@ -18,6 +18,7 @@ import com.gshashank.btcagent.data.network.SettingsApi
 import com.gshashank.btcagent.data.network.TokenAuthenticator
 import com.gshashank.btcagent.data.network.AuthInterceptor
 import com.gshashank.btcagent.data.network.TradingControlApi
+import com.gshashank.btcagent.data.network.UsersApi
 import com.gshashank.btcagent.data.network.VolumeProfileApi
 import dagger.Module
 import dagger.Provides
@@ -196,6 +197,12 @@ object NetworkModule {
     @Singleton
     fun provideSettingsApi(retrofit: Retrofit): SettingsApi =
         retrofit.create(SettingsApi::class.java)
+
+    // UsersApi uses the AUTHENTICATED Retrofit — admin users endpoints require the Firebase token.
+    @Provides
+    @Singleton
+    fun provideUsersApi(retrofit: Retrofit): UsersApi =
+        retrofit.create(UsersApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.
