@@ -21,9 +21,25 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // BASE_URL / WS_URL are supplied per env flavor below (dev vs prod), not here.
+    }
 
-        buildConfigField("String", "BASE_URL", "\"https://btc.gshashank.com/\"")
-        buildConfigField("String", "WS_URL", "\"wss://btc.gshashank.com/ws/price\"")
+    // env flavor dimension: dev targets the backend dev instance + dev Firebase project,
+    // prod targets production. The `.dev` applicationIdSuffix lets both install side-by-side.
+    flavorDimensions += "env"
+    productFlavors {
+        create("prod") {
+            dimension = "env"
+            buildConfigField("String", "BASE_URL", "\"https://btc.gshashank.com/\"")
+            buildConfigField("String", "WS_URL", "\"wss://btc.gshashank.com/ws/price\"")
+        }
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            buildConfigField("String", "BASE_URL", "\"https://dev.btc.gshashank.com/\"")
+            buildConfigField("String", "WS_URL", "\"wss://dev.btc.gshashank.com/ws/price\"")
+        }
     }
 
     buildTypes {
