@@ -1,6 +1,5 @@
 package com.gshashank.btcagent.ui.onboarding
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,15 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Monitor
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -35,8 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.gshashank.btcagent.ui.theme.BtcAccent
 import com.gshashank.btcagent.ui.theme.BtcDown
 import com.gshashank.btcagent.ui.theme.BtcUp
@@ -50,27 +51,31 @@ private data class OnboardingStep(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
-    val accent: Color,
+    /** Per-step icon-tile accent (orange → green → red). Header / progress bar / button stay orange. */
+    val iconAccent: Color,
 )
 
 private val STEPS = listOf(
     OnboardingStep(
         title = "Monitor your bot, live",
-        subtitle = "Live prices, P&L, and positions at a glance.",
+        subtitle = "Live BTC price, open positions, and today's P&L the moment they change. " +
+            "Your server-side bot — in your pocket.",
         icon = Icons.Filled.Monitor,
-        accent = BtcAccent,
+        iconAccent = BtcAccent,
     ),
     OnboardingStep(
         title = "Scan 1,410 timeframes",
-        subtitle = "Pattern alerts and DEPO setups across every timeframe.",
-        icon = Icons.Filled.Search,
-        accent = BtcUp,
+        subtitle = "Candlestick patterns and zone strategies fire as push alerts. " +
+            "DEPO marks setups forming near key levels.",
+        icon = Icons.Filled.GpsFixed,
+        iconAccent = BtcUp,
     ),
     OnboardingStep(
         title = "Trade behind guardrails",
-        subtitle = "Paper mode by default. Face ID required for live trading.",
-        icon = Icons.Filled.Shield,
-        accent = BtcDown,
+        subtitle = "Paper mode by default. Live orders need Face ID and an explicit confirm — " +
+            "real money always feels heavier.",
+        icon = Icons.Filled.MyLocation,
+        iconAccent = BtcDown,
     ),
 )
 
@@ -79,77 +84,96 @@ private val STEPS = listOf(
 // ---------------------------------------------------------------------------
 
 /**
- * 3-step intro carousel shown before Login on first launch only — MOBILE-23.
+ * 3-step intro carousel shown before Login on first launch only — MOBILE-23 / MOBILE-37 (mock align).
  *
- * Stateless: all navigation is driven by the [onFinish] callback, which the caller wires
- * to persist the seen-flag and navigate to Login.
+ * Matches the Claude Design onboarding mocks: a "STEP n OF 3" header + Skip top row, a centered
+ * tinted icon tile (per-step colour), title + body copy, a segmented progress bar, and a full-width
+ * orange "Next →" / "Get started →" button. Colours come from [MaterialTheme] so it renders correctly
+ * in both Bitcoin dark and light (and any active skin).
+ *
+ * Stateless: navigation is driven by [onFinish], which the caller wires to persist the seen-flag and
+ * navigate to Login.
  */
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
     val pagerState = rememberPagerState(pageCount = { STEPS.size })
     val scope = rememberCoroutineScope()
+    val currentPage = pagerState.currentPage
+    val isLastPage = currentPage == STEPS.size - 1
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween,
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 24.dp, vertical = 16.dp),
     ) {
-        // ---- pager ----
+        // ---- header: STEP n OF 3  +  Skip ----
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "STEP ${currentPage + 1} OF ${STEPS.size}",
+                color = BtcAccent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                letterSpacing = 1.5.sp,
+            )
+            TextButton(onClick = onFinish) {
+                Text(
+                    text = "Skip",
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f),
+                )
+            }
+        }
+
+        // ---- pager (icon tile + title + body), vertically centered ----
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
         ) { page ->
-            val step = STEPS[page]
-            OnboardingPage(step = step)
+            OnboardingPage(step = STEPS[page])
         }
 
-        // ---- progress dots ----
-        val currentAccent = STEPS[pagerState.currentPage].accent
-        ProgressDots(
+        // ---- segmented progress bar ----
+        SegmentedProgress(
             pageCount = STEPS.size,
-            currentPage = pagerState.currentPage,
-            activeAccent = currentAccent,
+            currentPage = currentPage,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // ---- button row ----
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Skip — hidden on last page
-            if (pagerState.currentPage < STEPS.size - 1) {
-                TextButton(onClick = onFinish) {
-                    Text(text = "Skip")
+        // ---- full-width primary button: Next → / Get started → (always orange) ----
+        Button(
+            onClick = {
+                if (isLastPage) {
+                    onFinish()
+                } else {
+                    scope.launch { pagerState.animateScrollToPage(currentPage + 1) }
                 }
-            } else {
-                Spacer(modifier = Modifier) // zero-width; keeps SpaceBetween right-aligning the button
-            }
-
-            // Next / Get started
-            val isLastPage = pagerState.currentPage == STEPS.size - 1
-            Button(
-                onClick = {
-                    if (isLastPage) {
-                        onFinish()
-                    } else {
-                        scope.launch {
-                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                        }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = currentAccent,
-                ),
-            ) {
-                Text(text = if (isLastPage) "Get started" else "Next")
-            }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = BtcAccent,
+                contentColor = Color.Black,
+            ),
+        ) {
+            Text(
+                text = if (isLastPage) "Get started" else "Next",
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
@@ -161,33 +185,33 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 @Composable
 private fun OnboardingPage(step: OnboardingStep) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(vertical = 32.dp),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        // 96dp icon tile
+        // Tinted rounded-square icon tile (~96dp), per-step colour.
         Box(
             modifier = Modifier
                 .size(96.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(step.accent.copy(alpha = 0.15f)),
+                .clip(RoundedCornerShape(28.dp))
+                .background(step.iconAccent.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = step.icon,
                 contentDescription = step.title,
-                tint = step.accent,
-                modifier = Modifier.size(48.dp),
+                tint = step.iconAccent,
+                modifier = Modifier.size(40.dp),
             )
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         Text(
             text = step.title,
-            style = MaterialTheme.typography.headlineSmall,
+            fontSize = 26.sp,
+            lineHeight = 32.sp,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground,
         )
@@ -196,38 +220,34 @@ private fun OnboardingPage(step: OnboardingStep) {
 
         Text(
             text = step.subtitle,
-            style = MaterialTheme.typography.bodyMedium,
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
             textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f),
         )
     }
 }
 
+/** Thin 3-segment progress bar, filled (orange) up to and including the current page. */
 @Composable
-private fun ProgressDots(
+private fun SegmentedProgress(
     pageCount: Int,
     currentPage: Int,
-    activeAccent: Color,
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val inactive = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.15f)
         repeat(pageCount) { index ->
-            val isActive = index == currentPage
-            val width by animateDpAsState(
-                targetValue = if (isActive) 24.dp else 8.dp,
-                label = "dot_width_$index",
-            )
+            val filled = index <= currentPage
             Box(
                 modifier = Modifier
-                    .height(8.dp)
-                    .width(width)
+                    .weight(if (index == currentPage) 1.6f else 1f)
+                    .height(4.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (isActive) activeAccent
-                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                    ),
+                    .background(if (filled) BtcAccent else inactive),
             )
         }
     }
