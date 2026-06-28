@@ -21,3 +21,6 @@ app/src/prod/google-services.json
 
 # Local generated dev docs (not part of any feature PR)
 docs/
+
+# Design mocks (Claude Design exports — local reference, not source)
+design/mocks/
