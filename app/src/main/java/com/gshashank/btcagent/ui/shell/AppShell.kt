@@ -95,6 +95,26 @@ fun AppShell(onSignedOut: () -> Unit = {}) {
                         onPositionsClick = {
                             navController.navigate(HomeTab.Positions)
                         },
+                        onScannerClick = {
+                            navController.navigate(TabGraph.Markets) {
+                                launchSingleTop = true
+                                restoreState = true
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                            }
+                            navController.navigate(MarketsRoute.Scanner)
+                        },
+                        onNewTradeClick = {
+                            navController.navigate(TabGraph.Trade) {
+                                launchSingleTop = true
+                                restoreState = true
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                            }
+                            navController.navigate(TradeTab.ManualEntry)
+                        },
                     )
                 }
                 composable<HomeTab.Positions> {

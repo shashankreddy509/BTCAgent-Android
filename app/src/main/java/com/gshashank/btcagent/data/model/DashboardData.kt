@@ -14,6 +14,11 @@ data class DashboardData(
      * emission. Defaults to 0L for REST-only state (no tick yet).
      */
     val priceTickMs: Long = 0L,
+    val scanIntervalMin: Int = 0,
+    val brokerName: String = "Coinbase",
+    val longCount: Int = 0,
+    val shortCount: Int = 0,
+    val positions: List<Position> = emptyList(),
 )
 
 enum class PriceDirection { Up, Down, Flat }

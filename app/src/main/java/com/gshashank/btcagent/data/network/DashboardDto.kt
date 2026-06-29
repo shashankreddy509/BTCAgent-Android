@@ -11,6 +11,7 @@ data class TradingStateDto(
     val settings: SettingsDto,
     @SerialName("current_price") val currentPrice: Double = 0.0,
     @SerialName("manual_pending") val manualPending: List<ManualPendingDto> = emptyList(),
+    @SerialName("broker_account_name") val brokerAccountName: String? = null,
 )
 
 @Serializable
@@ -38,6 +39,7 @@ data class TradeResultDto(
 data class SettingsDto(
     val mode: String = "paper",
     @SerialName("depo_entry_filter") val depoEntryFilter: Boolean = false,
+    @SerialName("scan_interval_min") val scanIntervalMin: Int = 0,
 )
 
 @Serializable

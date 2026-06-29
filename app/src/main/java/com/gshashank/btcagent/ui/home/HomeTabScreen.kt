@@ -16,10 +16,16 @@ import androidx.compose.ui.platform.testTag
  *
  * @param onPositionsClick Called when the user taps the Open Positions card; wired from
  *   [AppShell] to navigate to [HomeTab.Positions] — MOBILE-6.
+ * @param onScannerClick Called when the user taps the "Scanner" action button; wired from
+ *   [AppShell] to navigate to [MarketsRoute.Scanner].
+ * @param onNewTradeClick Called when the user taps the "New trade" action button; wired from
+ *   [AppShell] to navigate to [TradeTab.ManualEntry].
  */
 @Composable
 fun HomeTabScreen(
     onPositionsClick: () -> Unit = {},
+    onScannerClick: () -> Unit = {},
+    onNewTradeClick: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -28,6 +34,8 @@ fun HomeTabScreen(
     ) {
         DashboardScreen(
             onPositionsClick = onPositionsClick,
+            onScannerClick = onScannerClick,
+            onNewTradeClick = onNewTradeClick,
         )
     }
 }

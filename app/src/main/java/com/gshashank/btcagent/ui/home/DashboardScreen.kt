@@ -16,10 +16,16 @@ import com.gshashank.btcagent.ui.components.state.UiState
  *
  * @param onPositionsClick Called when the user taps the Open Positions card to navigate to
  *   the MOBILE-6 positions list (wired from the host NavGraph in [AppShell]).
+ * @param onScannerClick Called when the user taps the "Scanner" action button; wired to the
+ *   Markets/Scanner route from [AppShell].
+ * @param onNewTradeClick Called when the user taps the "New trade" action button; wired to the
+ *   Trade/ManualEntry route from [AppShell].
  */
 @Composable
 fun DashboardScreen(
     onPositionsClick: () -> Unit = {},
+    onScannerClick: () -> Unit = {},
+    onNewTradeClick: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -27,6 +33,8 @@ fun DashboardScreen(
         uiState = uiState,
         onRetry = viewModel::retry,
         onPositionsClick = onPositionsClick,
+        onScannerClick = onScannerClick,
+        onNewTradeClick = onNewTradeClick,
     )
 }
 
@@ -44,6 +52,8 @@ fun DashboardScreenContent(
     uiState: UiState<DashboardData>,
     onRetry: () -> Unit,
     onPositionsClick: () -> Unit = {},
+    onScannerClick: () -> Unit = {},
+    onNewTradeClick: () -> Unit = {},
 ) {
     DataStateScaffold(
         uiState = uiState,
@@ -52,6 +62,8 @@ fun DashboardScreenContent(
             DashboardHeroContent(
                 data = data,
                 onPositionsClick = onPositionsClick,
+                onScannerClick = onScannerClick,
+                onNewTradeClick = onNewTradeClick,
             )
         },
         onRetry = onRetry,
