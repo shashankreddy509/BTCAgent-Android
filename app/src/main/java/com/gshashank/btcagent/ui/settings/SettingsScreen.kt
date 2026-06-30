@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,6 +26,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,11 +36,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.gshashank.btcagent.data.model.BrokerInfo
+import com.gshashank.btcagent.data.repository.BrokerActionResult
 import com.gshashank.btcagent.ui.components.state.ActionResultUiState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -59,6 +65,7 @@ fun SettingsScreen(
     onNavigateToUsers: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     adminAccessViewModel: AdminAccessViewModel = hiltViewModel(),
+    brokerViewModel: BrokerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val actionResult by viewModel.actionResult.collectAsStateWithLifecycle()
@@ -66,6 +73,8 @@ fun SettingsScreen(
     val colorTheme by viewModel.colorTheme.collectAsStateWithLifecycle()
     val dashboardLayout by viewModel.dashboardLayout.collectAsStateWithLifecycle()
     val isAdmin by adminAccessViewModel.isAdmin.collectAsStateWithLifecycle()
+    val brokerState by brokerViewModel.brokerState.collectAsStateWithLifecycle()
+    val brokerActionResult by brokerViewModel.actionResult.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -85,6 +94,21 @@ fun SettingsScreen(
             is ActionResultUiState.Error -> {
                 snackbarHostState.showSnackbar(result.message)
                 viewModel.consumeActionResult()
+            }
+            null -> Unit
+        }
+    }
+
+    // Surface broker action feedback as a snackbar.
+    LaunchedEffect(brokerActionResult) {
+        when (val result = brokerActionResult) {
+            is BrokerActionResult.Success -> {
+                snackbarHostState.showSnackbar("Broker API credentials saved")
+                brokerViewModel.clearActionResult()
+            }
+            is BrokerActionResult.Error -> {
+                snackbarHostState.showSnackbar(result.message)
+                brokerViewModel.clearActionResult()
             }
             null -> Unit
         }
@@ -125,6 +149,7 @@ fun SettingsScreen(
                     colorTheme = colorTheme,
                     dashboardLayout = dashboardLayout,
                     isAdmin = isAdmin,
+                    brokerState = brokerState,
                     onSetDarkMode = { viewModel.setDarkMode(it) },
                     onSetColorTheme = { viewModel.setColorTheme(it) },
                     onSetDashboardLayout = { viewModel.setDashboardLayout(it) },
@@ -139,6 +164,9 @@ fun SettingsScreen(
                     },
                         onSignOut = { viewModel.signOut() },
                         onNavigateToUsers = onNavigateToUsers,
+                        onReplaceBroker = { broker, apiKey, apiSecret ->
+                            brokerViewModel.replaceBroker(broker, apiKey, apiSecret)
+                        },
                     )
                 }
                 else -> Unit
@@ -154,12 +182,14 @@ private fun SettingsContent(
     colorTheme: ColorTheme,
     dashboardLayout: DashboardLayout,
     isAdmin: Boolean,
+    brokerState: BrokerState,
     onSetDarkMode: (Boolean) -> Unit,
     onSetColorTheme: (ColorTheme) -> Unit,
     onSetDashboardLayout: (DashboardLayout) -> Unit,
     onSave: (Int?, Double?, Double?, Int?) -> Unit,
     onSignOut: () -> Unit,
     onNavigateToUsers: () -> Unit,
+    onReplaceBroker: (broker: String, apiKey: String, apiSecret: String) -> Unit,
 ) {
     // Editable trading param state — initialized from server values
     var qtyText by rememberSaveable(settings.qty) { mutableStateOf(settings.qty?.toString() ?: "") }
@@ -168,6 +198,9 @@ private fun SettingsContent(
     var maxConcurrentText by rememberSaveable(settings.maxConcurrent) {
         mutableStateOf(settings.maxConcurrent?.toString() ?: "")
     }
+
+    // Dialog state for Replace/Add broker credentials
+    var showBrokerDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -221,8 +254,42 @@ private fun SettingsContent(
             }
         }
 
-        // BROKER API section — deferred (BTCWEB-58); no card rendered here
-        // TODO: add broker summary card once BTCWEB-58 endpoint is available
+        // Section header: BROKER API
+        Text(
+            text = "BROKER API",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+        )
+
+        // Broker API card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = CardDefaults.outlinedCardBorder(),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                when (val state = brokerState) {
+                    is BrokerState.Loading -> {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                    is BrokerState.Error -> {
+                        Text(
+                            text = state.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    is BrokerState.Ready -> {
+                        val brokerInfo = state.brokerInfo
+                        BrokerApiCardContent(
+                            brokerInfo = brokerInfo,
+                            onClickReplace = { showBrokerDialog = true },
+                        )
+                    }
+                }
+            }
+        }
 
         // Section header: SCANNER PARAMETERS
         Text(
@@ -346,6 +413,148 @@ private fun SettingsContent(
             Text("Sign Out")
         }
     }
+
+    // Replace/Add broker credentials dialog
+    if (showBrokerDialog) {
+        val configuredBroker = (brokerState as? BrokerState.Ready)?.brokerInfo?.broker ?: "coinbase"
+        BrokerCredentialsDialog(
+            defaultBroker = configuredBroker,
+            onDismiss = { showBrokerDialog = false },
+            onConfirm = { broker, apiKey, apiSecret ->
+                onReplaceBroker(broker, apiKey, apiSecret)
+                showBrokerDialog = false
+            },
+        )
+    }
+}
+
+/** Card content for the Broker API section — shows broker label, masked key, connected status, and Replace/Add button. */
+@Composable
+private fun BrokerApiCardContent(
+    brokerInfo: BrokerInfo?,
+    onClickReplace: () -> Unit,
+) {
+    if (brokerInfo == null) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "No broker connected",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(onClick = onClickReplace) {
+                Text("Add")
+            }
+        }
+    } else {
+        Column {
+            // Broker name / account name row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = brokerInfo.accountName.ifBlank { brokerInfo.broker },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                // Connected status indicator
+                val (indicatorText, indicatorColor) = when (brokerInfo.connected) {
+                    true -> "● Connected" to Color(0xFF4CAF50)
+                    false -> "● Disconnected" to MaterialTheme.colorScheme.error
+                    null -> "—" to MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Text(
+                    text = indicatorText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = indicatorColor,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Masked API key row + Replace button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = brokerInfo.apiKeyMasked.ifBlank { "—" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onClickReplace) {
+                    Text("Replace")
+                }
+            }
+        }
+    }
+}
+
+/** Dialog for entering new broker API credentials. */
+@Composable
+private fun BrokerCredentialsDialog(
+    defaultBroker: String,
+    onDismiss: () -> Unit,
+    onConfirm: (broker: String, apiKey: String, apiSecret: String) -> Unit,
+) {
+    // Use remember (NOT rememberSaveable) — raw broker credentials must never be persisted to the
+    // saved-instance-state Bundle on disk.
+    var brokerText by remember { mutableStateOf(defaultBroker.ifBlank { "coinbase" }) }
+    var apiKeyText by remember { mutableStateOf("") }
+    var apiSecretText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Broker API Credentials") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = brokerText,
+                    onValueChange = { brokerText = it },
+                    label = { Text("Broker") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = apiKeyText,
+                    onValueChange = { apiKeyText = it },
+                    label = { Text("API Key") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = apiSecretText,
+                    onValueChange = { apiSecretText = it },
+                    label = { Text("API Secret") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (brokerText.isNotBlank() && apiKeyText.isNotBlank() && apiSecretText.isNotBlank()) {
+                        onConfirm(brokerText.trim(), apiKeyText.trim(), apiSecretText.trim())
+                    }
+                },
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
 
 /** Read-only label+value row used in the Scanner Parameters section. */
