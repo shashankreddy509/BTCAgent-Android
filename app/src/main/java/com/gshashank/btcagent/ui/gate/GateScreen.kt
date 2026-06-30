@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,7 +31,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -88,46 +93,71 @@ private fun PendingContent(
     ) {
         Spacer(modifier = Modifier.weight(1f))
 
-        // 84dp accent spinner ring.
+        // Accent spinner ring inside a soft circular halo (matches the mock's peach disc).
         Box(
             modifier = Modifier
-                .size(84.dp)
-                .testTag("gate_spinner"),
+                .size(120.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    shape = CircleShape,
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.fillMaxSize(),
-                strokeWidth = 3.dp,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .testTag("gate_spinner"),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.fillMaxSize(),
+                    strokeWidth = 3.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Headline
         Text(
             text = "Waiting for approval",
             style = MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 21.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onBackground,
             ),
             modifier = Modifier.testTag("gate_headline"),
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Email
+        // Body: full explanation with the email emphasised inline.
         Text(
-            text = uiState.email,
+            text = buildAnnotatedString {
+                append("You're signed in as ")
+                withStyle(
+                    SpanStyle(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                ) {
+                    append(uiState.email)
+                }
+                append(", but this email isn't on the allow-list yet. The bot owner has been notified.")
+            },
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 14.sp,
+                lineHeight = 20.sp,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.56f),
             ),
-            modifier = Modifier.testTag("gate_email"),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .padding(horizontal = 32.dp)
+                .testTag("gate_email"),
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Status chip with pulsing dot
         val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -142,13 +172,13 @@ private fun PendingContent(
         )
 
         Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
             modifier = Modifier.testTag("gate_status_chip"),
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
@@ -159,19 +189,22 @@ private fun PendingContent(
                             shape = CircleShape,
                         ),
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Pending review",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = "Status: Pending review",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                 )
             }
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Sign-out button pinned to the bottom.
-        TextButton(
+        // Sign-out button pinned to the bottom (outlined, matching the mock).
+        OutlinedButton(
             onClick = onSignOut,
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.25f)),
             modifier = Modifier.testTag("gate_sign_out"),
         ) {
             Text(
