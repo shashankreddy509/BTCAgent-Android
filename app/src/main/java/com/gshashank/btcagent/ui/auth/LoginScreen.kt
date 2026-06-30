@@ -262,25 +262,41 @@ private fun LoginContentMock(
         ) {
             Spacer(modifier = Modifier.height(56.dp))
 
-            // Bitcoin logo tile — 64dp, gradient fill, 18dp radius.
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(BtcAccent, BtcAccentDark),
-                        )
-                    )
-                    .semantics { contentDescription = "Bitcoin logo" },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "₿",
-                    color = Color.Black,
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
+            // Bitcoin logo tile — 64dp, gradient fill, 18dp radius, with a soft accent glow
+            // behind it (matches the mock's radial halo).
+            Box(contentAlignment = Alignment.Center) {
+                // Glow: a larger blurred-looking radial accent halo behind the tile.
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    BtcAccent.copy(alpha = 0.35f),
+                                    Color.Transparent,
+                                ),
+                            ),
+                        ),
                 )
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(BtcAccent, BtcAccentDark),
+                            )
+                        )
+                        .semantics { contentDescription = "Bitcoin logo" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "₿",
+                        color = Color.Black,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -289,7 +305,7 @@ private fun LoginContentMock(
             Text(
                 text = "BTC AI Agent",
                 style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
                 ),
                 textAlign = TextAlign.Start,
