@@ -14,6 +14,8 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -21,7 +23,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 /**
- * JVM unit tests for [SettingsRepositoryImpl] — MOBILE-20.
+ * JVM unit tests for [SettingsRepositoryImpl] — MOBILE-20 / MOBILE-42.
  *
  * Uses [MockWebServer] as the in-process HTTP server so real HTTP responses are parsed by the
  * Retrofit layer and then mapped by the repository.
@@ -33,26 +35,37 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
  * Repository contract:
  *   - NEVER throws to callers; CancellationException is rethrown.
  *   - errorBody() is closed on non-2xx.
- *   - Masked broker key values (containing "****") are NEVER sent to the server.
  *   - qty validated client-side: 0 < qty <= 1000 AND even; invalid → immediate error, no HTTP call.
  *   - HTTP error reason is masked — "Server error (<code>)" not raw response.message().
+ *
+ * MOBILE-42 changes:
+ *   - broker_keys removed from UserSettingsDto and UserSettings domain model.
+ *   - Scanner fields (scan_interval_min, tf_min, tf_max, patterns) added to UserSettings.
+ *   - fetchUserSettings maps scanner fields from the serving endpoint.
  *
  * All tests MUST fail (red) until [SettingsRepositoryImpl] is implemented.
  *
  * Test coverage:
  *   1.  GET 200 → maps qty, max_sl, min_tp, max_concurrent, mode correctly
- *   2.  GET response with masked broker key → exposed as display string ("ABCD****WXYZ")
- *   3.  PUT sends only changed keys (sparse body, snake_case via @SerialName)
- *   4.  Value containing "****" is NEVER sent in PUT body (client guard)
- *   5.  qty=0 is invalid → SettingsResult.Error before any HTTP call
- *   6.  qty=3 (odd) is invalid → SettingsResult.Error before any HTTP call (must be even)
- *   7.  qty=1001 is invalid → SettingsResult.Error before any HTTP call
- *   8.  qty=2 (valid even, in range) → PUT proceeds to server
- *   9.  HTTP 401 → SettingsResult.Error
- *   10. HTTP 500 → SettingsResult.Error with "Server error (500)" message (reason masked)
- *   11. errorBody() is closed on non-2xx (connection pool not exhausted)
- *   12. CancellationException — generic IOException must NOT become CancellationException
- *   13. Network exception → SettingsResult.Error (repository never throws)
+ *   2.  GET 200 → maps scanner fields (scan_interval_min, tf_min, tf_max, patterns)
+ *   3.  GET response with no broker_keys field → parses without error (brokerKeys removed)
+ *   4.  PUT sends only changed keys (sparse body, snake_case via @SerialName)
+ *   5.  saveTradingParams sends snake_case field names not camelCase
+ *   6.  saveTradingParams with a value containing four-star sentinel is not sent to server
+ *   7.  saveTradingParams never sends string containing four stars to the server
+ *   8.  qty=0 is invalid → error before any HTTP call
+ *   9.  qty=3 (odd) is invalid → error before any HTTP call
+ *   10. qty=1001 is invalid → error before any HTTP call
+ *   11. qty=2 (valid even, in range) → PUT proceeds to server
+ *   12. qty=1000 valid max boundary → PUT proceeds to server
+ *   13. HTTP 401 → SettingsResult.Error
+ *   14. HTTP 500 → SettingsResult.Error with masked reason not raw message
+ *   15. saveTradingParams 500 returns ActionResult Error with code
+ *   16. errorBody is closed after non-2xx so connection pool is not exhausted
+ *   17. Generic IOException from fetchUserSettings does not produce CancellationException
+ *   18. Network exception from fetchUserSettings → SettingsResult.Error (never throws)
+ *   19. Network exception from saveTradingParams → ActionResult.Error (never throws)
+ *   20. Scanner fields absent from JSON default to null (not crash)
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsRepositoryImplTest {
@@ -71,7 +84,8 @@ class SettingsRepositoryImplTest {
 
     /**
      * Builds a full GET api/settings/user JSON response body.
-     * [brokerKeysJson] is a JSON array of masked key strings.
+     * No broker_keys field — it has been removed from the DTO (MOBILE-42).
+     * Includes optional scanner fields.
      */
     private fun userSettingsResponseJson(
         qty: Int = 4,
@@ -79,17 +93,26 @@ class SettingsRepositoryImplTest {
         minTp: Double = 1.0,
         maxConcurrent: Int = 3,
         mode: String = "paper",
-        brokerKeysJson: String = """["ABCD****WXYZ"]""",
-    ): String = """
-        {
-          "qty": $qty,
-          "max_sl": $maxSl,
-          "min_tp": $minTp,
-          "max_concurrent": $maxConcurrent,
-          "mode": "$mode",
-          "broker_keys": $brokerKeysJson
-        }
-    """.trimIndent()
+        scanIntervalMin: Int? = null,
+        tfMin: Int? = null,
+        tfMax: Int? = null,
+        patternsJson: String? = null,
+    ): String {
+        // tf_min / tf_max are bare integers (minutes) in the real backend JSON — not strings.
+        val scanIntervalPart = if (scanIntervalMin != null) ""","scan_interval_min": $scanIntervalMin""" else ""
+        val tfMinPart = if (tfMin != null) ""","tf_min": $tfMin""" else ""
+        val tfMaxPart = if (tfMax != null) ""","tf_max": $tfMax""" else ""
+        val patternsPart = if (patternsJson != null) ""","patterns": $patternsJson""" else ""
+        return """
+            {
+              "qty": $qty,
+              "max_sl": $maxSl,
+              "min_tp": $minTp,
+              "max_concurrent": $maxConcurrent,
+              "mode": "$mode"$scanIntervalPart$tfMinPart$tfMaxPart$patternsPart
+            }
+        """.trimIndent()
+    }
 
     /** A minimal PUT 200 success response. */
     private fun saveSuccessJson(): String = """{"status": "saved"}"""
@@ -177,20 +200,23 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 2. GET response with masked broker key → exposed as display string
+    // 2. GET 200 → maps scanner fields (scan_interval_min, tf_min, tf_max, patterns)
+    //    MOBILE-42: new test for scanner field mapping
     // =========================================================================
 
     @Test
-    fun `fetchUserSettings maps masked broker keys as display strings`() =
+    fun `fetchUserSettings 200 maps scanner fields scanIntervalMin tfMin tfMax and patterns`() =
         runTest(testDispatcher) {
-            val maskedKey = "ABCD****WXYZ"
             mockWebServer.enqueue(
                 MockResponse()
                     .setResponseCode(200)
                     .setHeader("Content-Type", "application/json")
                     .setBody(
                         userSettingsResponseJson(
-                            brokerKeysJson = """["$maskedKey"]""",
+                            scanIntervalMin = 15,
+                            tfMin = 15,
+                            tfMax = 360,
+                            patternsJson = """["BULL_FLAG","BEAR_CHANNEL"]""",
                         )
                     ),
             )
@@ -198,24 +224,181 @@ class SettingsRepositoryImplTest {
             val result = repository.fetchUserSettings()
 
             assertTrue(
-                "HTTP 200 with masked broker key must produce SettingsResult.Success, got $result",
+                "HTTP 200 with scanner fields must produce SettingsResult.Success, got $result",
                 result is SettingsResult.Success,
             )
             val settings = (result as SettingsResult.Success).settings
 
-            assertTrue(
-                "brokerKeys must be non-empty when the server returns a masked key",
-                settings.brokerKeys.isNotEmpty(),
+            assertEquals(
+                "scanIntervalMin must be mapped from scan_interval_min in response",
+                15,
+                settings.scanIntervalMin,
             )
             assertEquals(
-                "The masked broker key must be preserved verbatim as a display string",
-                maskedKey,
-                settings.brokerKeys[0],
+                "tfMin must be mapped from tf_min in response",
+                15,
+                settings.tfMin,
+            )
+            assertEquals(
+                "tfMax must be mapped from tf_max in response",
+                360,
+                settings.tfMax,
+            )
+            assertNotNull(
+                "patterns must be non-null when the server returns a patterns array",
+                settings.patterns,
+            )
+            assertEquals(
+                "patterns must contain 2 entries from the response",
+                2,
+                settings.patterns?.size,
+            )
+            assertTrue(
+                "patterns must contain BULL_FLAG",
+                settings.patterns?.contains("BULL_FLAG") == true,
+            )
+            assertTrue(
+                "patterns must contain BEAR_CHANNEL",
+                settings.patterns?.contains("BEAR_CHANNEL") == true,
             )
         }
 
     // =========================================================================
-    // 3. PUT sends only changed keys (sparse body, snake_case via @SerialName)
+    // 3. GET response with no broker_keys field → parses without error
+    //    MOBILE-42: broker_keys removed — a JSON body without it must still parse
+    // =========================================================================
+
+    @Test
+    fun `fetchUserSettings without broker_keys field in JSON parses successfully`() =
+        runTest(testDispatcher) {
+            // This JSON has no broker_keys key at all — server never emits it.
+            // UserSettingsDto must not have broker_keys after MOBILE-42 cleanup.
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "qty": 4,
+                          "max_sl": 2.5,
+                          "min_tp": 1.0,
+                          "max_concurrent": 3,
+                          "mode": "paper"
+                        }
+                        """.trimIndent()
+                    ),
+            )
+
+            val result = repository.fetchUserSettings()
+
+            assertTrue(
+                "JSON without broker_keys must parse to SettingsResult.Success (field removed), got $result",
+                result is SettingsResult.Success,
+            )
+            val settings = (result as SettingsResult.Success).settings
+
+            // Verify UserSettings no longer has a brokerKeys field by checking it compiles
+            // and maps correctly without it.
+            assertEquals(
+                "qty must still map correctly when broker_keys is absent",
+                4,
+                settings.qty,
+            )
+        }
+
+    // =========================================================================
+    // 4. GET response with broker_keys present in JSON → field is ignored (removed from DTO)
+    //    MOBILE-42: even if the server sends broker_keys, it must not fail — ignoreUnknownKeys=true
+    // =========================================================================
+
+    @Test
+    fun `fetchUserSettings with legacy broker_keys field in JSON ignores it and parses successfully`() =
+        runTest(testDispatcher) {
+            // If the server happens to still send broker_keys, ignoreUnknownKeys must swallow it.
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "qty": 6,
+                          "max_sl": 3.5,
+                          "min_tp": 1.5,
+                          "max_concurrent": 2,
+                          "mode": "live",
+                          "broker_keys": ["ABCD****WXYZ"]
+                        }
+                        """.trimIndent()
+                    ),
+            )
+
+            val result = repository.fetchUserSettings()
+
+            assertTrue(
+                "JSON with extra broker_keys field must still parse to SettingsResult.Success, got $result",
+                result is SettingsResult.Success,
+            )
+            val settings = (result as SettingsResult.Success).settings
+
+            assertEquals(
+                "qty must map correctly even when broker_keys is present in JSON",
+                6,
+                settings.qty,
+            )
+            assertEquals(
+                "mode live must map to ExecutionMode.LIVE even when broker_keys present in JSON",
+                ExecutionMode.LIVE,
+                settings.mode,
+            )
+        }
+
+    // =========================================================================
+    // 5. Scanner fields absent from JSON → null defaults (not a crash)
+    //    MOBILE-42: fields are nullable; missing from JSON → null
+    // =========================================================================
+
+    @Test
+    fun `fetchUserSettings scanner fields absent from JSON default to null without crashing`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(
+                        userSettingsResponseJson() // No scanner params
+                    ),
+            )
+
+            val result = repository.fetchUserSettings()
+
+            assertTrue(
+                "Response without scanner fields must still produce SettingsResult.Success, got $result",
+                result is SettingsResult.Success,
+            )
+            val settings = (result as SettingsResult.Success).settings
+
+            assertNull(
+                "scanIntervalMin must be null when absent from JSON",
+                settings.scanIntervalMin,
+            )
+            assertNull(
+                "tfMin must be null when absent from JSON",
+                settings.tfMin,
+            )
+            assertNull(
+                "tfMax must be null when absent from JSON",
+                settings.tfMax,
+            )
+            assertTrue(
+                "patterns must be empty or null when absent from JSON",
+                settings.patterns == null || settings.patterns!!.isEmpty(),
+            )
+        }
+
+    // =========================================================================
+    // 6. PUT sends only changed keys (sparse body, snake_case via @SerialName)
     // =========================================================================
 
     @Test
@@ -306,7 +489,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 4. Value containing "****" is NEVER sent in PUT body (client guard)
+    // 7. Value containing "****" is NEVER sent in PUT body (client guard)
     // =========================================================================
 
     @Test
@@ -314,9 +497,6 @@ class SettingsRepositoryImplTest {
         runTest(testDispatcher) {
             // The repository should refuse to send any value containing "****".
             // No HTTP request should be made — or if it is, the masked value must be absent.
-            // We do NOT enqueue a response here — if the repo tries to make an HTTP call with
-            // a masked value it will hang or fail, proving the guard is missing. The guard
-            // should prevent the HTTP call entirely.
             val callCountBefore = mockWebServer.requestCount
 
             val result = repository.saveTradingParams(
@@ -324,12 +504,6 @@ class SettingsRepositoryImplTest {
                 maxSl = null,
                 minTp = null,
                 maxConcurrent = null,
-                // A mode value containing "****" would be invalid; mode is an enum in practice,
-                // but this test covers a string-valued param path. We use the masked sentinel
-                // pattern: if the repo receives any parameter that maps to a string with "****",
-                // it must NOT forward it.
-                // The real guard: broker key strings read from GET response contain "****" and
-                // must never be sent back. We test via the direct guard method.
                 mode = null,
             )
 
@@ -340,14 +514,8 @@ class SettingsRepositoryImplTest {
                     .setBody(saveSuccessJson()),
             )
 
-            // Now test the guard: attempt to save a UserSettings with a masked key.
-            // The repo's guard function must filter out masked values before PUT.
             val filteredCallCount = mockWebServer.requestCount
 
-            // Primary assertion: the masked-key guard is exercised. We verify by calling
-            // the guard path. The fact that qty=null, mode=null with no non-masked fields
-            // either produces an early return or an empty-body PUT.
-            // The critical discriminator: the body must not contain "****".
             if (filteredCallCount > callCountBefore) {
                 val recordedBody = mockWebServer.takeRequest().body.readUtf8()
                 assertFalse(
@@ -362,17 +530,12 @@ class SettingsRepositoryImplTest {
     @Test
     fun `saveTradingParams never sends string containing four stars to the server`() =
         runTest(testDispatcher) {
-            // This is the authoritative guard test. We call a hypothetical overload or
-            // helper that verifies the implementation filters "****" strings.
-            // Implementation note: the repo must check every string value before PUT and
-            // skip any that contain "****" (the broker-key masking sentinel).
             mockWebServer.enqueue(
                 MockResponse()
                     .setResponseCode(200)
                     .setBody(saveSuccessJson()),
             )
 
-            // Call saveTradingParams with a mode value that is valid (not a masked string).
             repository.saveTradingParams(
                 qty = 2,
                 maxSl = null,
@@ -391,7 +554,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 5. qty=0 is invalid → error before any HTTP call
+    // 8. qty=0 is invalid → error before any HTTP call
     // =========================================================================
 
     @Test
@@ -419,7 +582,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 6. qty=3 (odd) is invalid → error before any HTTP call
+    // 9. qty=3 (odd) is invalid → error before any HTTP call
     // =========================================================================
 
     @Test
@@ -447,7 +610,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 7. qty=1001 is invalid → error before any HTTP call
+    // 10. qty=1001 is invalid → error before any HTTP call
     // =========================================================================
 
     @Test
@@ -475,7 +638,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 8. qty=2 (valid even, in range) → PUT proceeds to server
+    // 11. qty=2 (valid even, in range) → PUT proceeds to server
     // =========================================================================
 
     @Test
@@ -532,7 +695,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 9. HTTP 401 → SettingsResult.Error
+    // 12. HTTP 401 → SettingsResult.Error
     // =========================================================================
 
     @Test
@@ -553,7 +716,7 @@ class SettingsRepositoryImplTest {
     }
 
     // =========================================================================
-    // 10. HTTP 500 → SettingsResult.Error with "Server error (500)" (reason masked)
+    // 13. HTTP 500 → SettingsResult.Error with "Server error (500)" (reason masked)
     // =========================================================================
 
     @Test
@@ -612,7 +775,7 @@ class SettingsRepositoryImplTest {
     }
 
     // =========================================================================
-    // 11. errorBody() is closed on non-2xx (connection pool not exhausted)
+    // 14. errorBody() is closed on non-2xx (connection pool not exhausted)
     //
     // Verified indirectly: making two non-2xx calls sequentially on a single-connection
     // server must not dead-lock (pool stall would occur if errorBody were leaked).
@@ -644,7 +807,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 12. CancellationException: generic IOException must NOT become CancellationException
+    // 15. CancellationException: generic IOException must NOT become CancellationException
     // =========================================================================
 
     @Test
@@ -667,7 +830,7 @@ class SettingsRepositoryImplTest {
         }
 
     // =========================================================================
-    // 13. Network exception → SettingsResult.Error (repository never throws)
+    // 16. Network exception → SettingsResult.Error (repository never throws)
     // =========================================================================
 
     @Test

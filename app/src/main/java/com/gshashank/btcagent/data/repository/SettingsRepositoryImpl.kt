@@ -12,7 +12,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Implements [SettingsRepository] — MOBILE-20.
+ * Implements [SettingsRepository] — MOBILE-20 / MOBILE-42.
  *
  * - Never throws to callers; rethrows [CancellationException] so coroutine cancellation propagates.
  * - Closes errorBody() on every non-2xx path to avoid connection pool starvation.
@@ -21,11 +21,13 @@ import javax.inject.Singleton
  * - MASKED-KEY GUARD: mode is an enum at the call site, so it cannot contain "****".
  *   UserSettingsWriteRequest has no broker_keys field, so masked display strings are structurally
  *   excluded from the PUT body.
+ * - MOBILE-42: broker_keys removed from DTO; scanner fields (scanIntervalMin, tfMin, tfMax, patterns)
+ *   mapped from GET api/settings/user response for display only.
  */
 @Singleton
 class SettingsRepositoryImpl @Inject constructor(
-    val settingsApi: SettingsApi,
-    @IoDispatcher val ioDispatcher: CoroutineDispatcher,
+    private val settingsApi: SettingsApi,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : SettingsRepository {
 
     override suspend fun fetchUserSettings(): SettingsResult = withContext(ioDispatcher) {
@@ -53,13 +55,24 @@ class SettingsRepositoryImpl @Inject constructor(
                     minTp = body.minTp,
                     maxConcurrent = body.maxConcurrent,
                     mode = mode,
-                    brokerKeys = body.brokerKeys,
+                    // Scanner fields — display only (MOBILE-42), from GET /api/settings/user
+                    scanIntervalMin = body.scanIntervalMin,
+                    tfMin = body.tfMin,
+                    tfMax = body.tfMax,
+                    patterns = body.patterns,
                 )
             )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            SettingsResult.Error("Network error")
+            // Distinguish a response-parse failure from a transport failure — a 200 that fails to
+            // deserialize is NOT a network problem and was previously masked as one.
+            val message = if (e is kotlinx.serialization.SerializationException) {
+                "Failed to read settings"
+            } else {
+                "Network error"
+            }
+            SettingsResult.Error(message)
         }
     }
 

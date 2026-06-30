@@ -3,6 +3,7 @@ package com.gshashank.btcagent.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gshashank.btcagent.data.model.ColorTheme
+import com.gshashank.btcagent.data.model.DashboardLayout
 import com.gshashank.btcagent.data.model.ExecutionMode
 import com.gshashank.btcagent.data.model.UserSettings
 import com.gshashank.btcagent.data.repository.ActionResult
@@ -27,7 +28,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * ViewModel for the Settings screen — MOBILE-20.
+ * ViewModel for the Settings screen — MOBILE-20 / MOBILE-42.
  *
  * Exposes:
  * - [uiState] — Loading → Ready/Error after fetch.
@@ -35,6 +36,7 @@ import javax.inject.Inject
  * - [navigateToLogin] — emits Unit when sign-out completes.
  * - [darkMode] — persisted dark-mode preference.
  * - [colorTheme] — persisted color theme preference (MOBILE-25).
+ * - [dashboardLayout] — persisted dashboard layout preference (MOBILE-42).
  *
  * Double-tap guard: [saveJob] prevents concurrent in-flight save calls.
  * Validation errors (qty) are surfaced immediately via actionResult without an HTTP call.
@@ -53,7 +55,7 @@ class SettingsViewModel @Inject constructor(
     private val _actionResult = MutableStateFlow<ActionResultUiState?>(null)
     val actionResult: StateFlow<ActionResultUiState?> = _actionResult.asStateFlow()
 
-    private val _navigateToLogin = MutableSharedFlow<Unit>()
+    private val _navigateToLogin = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigateToLogin: SharedFlow<Unit> = _navigateToLogin.asSharedFlow()
 
     /** Persisted dark-mode preference, so the Appearance toggle reflects the stored state. */
@@ -72,15 +74,30 @@ class SettingsViewModel @Inject constructor(
             initialValue = ColorTheme.BITCOIN,
         )
 
+    /** Persisted dashboard layout preference — MOBILE-42. */
+    val dashboardLayout: StateFlow<DashboardLayout> = appearanceRepository.dashboardLayoutFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = DashboardLayout.HERO,
+        )
+
     private var saveJob: Job? = null
 
     init {
         loadSettings()
     }
 
+    /** Clears the one-shot write feedback after the snackbar has shown it. */
+    fun consumeActionResult() {
+        _actionResult.value = null
+    }
+
     fun loadSettings() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
+            // Yield once so the construction-time Loading state is observable before the
+            // fetch resolves (the unit tests assert this; harmless in production).
             delay(1L)
             when (val result = settingsRepository.fetchUserSettings()) {
                 is SettingsResult.Success -> {
@@ -116,6 +133,7 @@ class SettingsViewModel @Inject constructor(
         if (saveJob?.isActive == true) return
 
         saveJob = viewModelScope.launch {
+            // Yield once so an in-flight save is observable to the double-tap guard test.
             delay(1L)
             when (val result = settingsRepository.saveTradingParams(qty, maxSl, minTp, maxConcurrent, mode)) {
                 is ActionResult.Success -> {
@@ -142,6 +160,13 @@ class SettingsViewModel @Inject constructor(
     fun setColorTheme(theme: ColorTheme) {
         viewModelScope.launch {
             appearanceRepository.setColorTheme(theme)
+        }
+    }
+
+    /** Persists the selected [layout] — MOBILE-42. */
+    fun setDashboardLayout(layout: DashboardLayout) {
+        viewModelScope.launch {
+            appearanceRepository.setDashboardLayout(layout)
         }
     }
 
