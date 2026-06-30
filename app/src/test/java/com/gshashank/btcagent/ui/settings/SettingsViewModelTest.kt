@@ -29,7 +29,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * JVM unit tests for [SettingsViewModel] — MOBILE-20.
+ * JVM unit tests for [SettingsViewModel] — MOBILE-20 / MOBILE-42.
  *
  * Uses hand-written fakes for all collaborators ([FakeSettingsRepository],
  * [FakeAppearanceRepository], [FakeAuthRepository]) so no real network or Android framework
@@ -39,11 +39,18 @@ import org.junit.Test
  *
  * **No catalog flag** — Settings is foundational (user decision). No catalog-gating test needed.
  *
- * All tests MUST fail (red) until [SettingsViewModel] is implemented.
+ * MOBILE-42 changes:
+ *   - brokerKeys removed from UserSettings domain model and sampleSettings fixture.
+ *   - Scanner fields (scanIntervalMin, tfMin, tfMax, patterns) present in UserSettings.
+ *   - dashboardLayout StateFlow exposed on ViewModel.
+ *   - setDashboardLayout() method added.
+ *   - Trading param inputs are editable — save sends the EDITED values, not the originally loaded ones.
+ *
+ * All tests MUST fail (red) until the corresponding implementation changes land.
  *
  * Test coverage:
  *   1.  Initial state is UiState.Loading before fetch completes
- *   2.  Load success → uiState = Ready with correct UserSettings
+ *   2.  Load success → uiState = Ready with correct UserSettings (no brokerKeys field)
  *   3.  Load failure → uiState = Error
  *   4.  saveTradingParams success → ActionResultUiState.Success + triggers refresh
  *   5.  qty=0 → validation error, no PUT, actionResult shows Error
@@ -51,9 +58,17 @@ import org.junit.Test
  *   7.  Dark mode toggle → calls AppearanceRepository.setDarkMode
  *   8.  Sign out → calls AuthRepository.signOut() + navigateToLogin emits
  *   9.  Double-tap guard on save: second tap while in-flight is ignored
- *   10. Masked broker key is present read-only in uiState (never sent back via saveTradingParams)
+ *   10. Save sends the EDITED trading-param values (not the originally loaded stubs)
  *   11. setColorTheme(COBALT) → calls AppearanceRepository.setColorTheme with ColorTheme.COBALT
  *   12. setColorTheme(VIOLET) → calls AppearanceRepository.setColorTheme with ColorTheme.VIOLET
+ *   13. dashboardLayout StateFlow initial value reflects AppearanceRepository.dashboardLayoutFlow
+ *   14. setDashboardLayout(GRID) calls AppearanceRepository.setDashboardLayout(GRID)
+ *       and dashboardLayout StateFlow emits GRID
+ *   15. setDashboardLayout(HERO) calls AppearanceRepository.setDashboardLayout(HERO)
+ *       and dashboardLayout StateFlow emits HERO
+ *   16. setDashboardLayout(TERMINAL) calls AppearanceRepository.setDashboardLayout(TERMINAL)
+ *       and dashboardLayout StateFlow emits TERMINAL
+ *   17. Load success → scanner fields (scanIntervalMin, tfMin, tfMax, patterns) present in Ready state
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -66,7 +81,7 @@ class SettingsViewModelTest {
     private lateinit var fakeAuthRepo: FakeAuthRepository
 
     // -------------------------------------------------------------------------
-    // Stable domain fixtures
+    // Stable domain fixtures — MOBILE-42: no brokerKeys field; scanner fields present
     // -------------------------------------------------------------------------
 
     private val sampleSettings = UserSettings(
@@ -75,7 +90,10 @@ class SettingsViewModelTest {
         minTp = 1.0,
         maxConcurrent = 3,
         mode = ExecutionMode.PAPER,
-        brokerKeys = listOf("ABCD****WXYZ"),
+        scanIntervalMin = 15,
+        tfMin = 15,
+        tfMax = 360,
+        patterns = listOf("BULL_FLAG", "BEAR_CHANNEL"),
     )
 
     @Before
@@ -111,7 +129,8 @@ class SettingsViewModelTest {
     }
 
     // =========================================================================
-    // 2. Load success → uiState = Ready with correct UserSettings
+    // 2. Load success → uiState = Ready with correct UserSettings (no brokerKeys)
+    //    MOBILE-42: sampleSettings has no brokerKeys; scanner fields present
     // =========================================================================
 
     @Test
@@ -149,15 +168,6 @@ class SettingsViewModelTest {
                 "mode must be populated from fetched settings",
                 ExecutionMode.PAPER,
                 data.mode,
-            )
-            assertTrue(
-                "brokerKeys must be non-empty from fetched settings",
-                data.brokerKeys.isNotEmpty(),
-            )
-            assertEquals(
-                "Masked broker key must be present as a display string",
-                "ABCD****WXYZ",
-                data.brokerKeys[0],
             )
 
             cancelAndIgnoreRemainingEvents()
@@ -437,75 +447,57 @@ class SettingsViewModelTest {
         }
 
     // =========================================================================
-    // 10. Masked broker key is present read-only in uiState
-    //     (never sent back via saveTradingParams signature)
+    // 10. Save sends the EDITED trading-param values (not the originally loaded stubs)
+    //     MOBILE-42: trading param fields are now editable; save must forward the
+    //     edited values the user typed, NOT the stale loaded values.
     // =========================================================================
 
     @Test
-    fun `masked broker key appears in uiState Ready data as read-only display string`() = runTest {
-        val settingsWithMaskedKey = UserSettings(
+    fun `saveTradingParams sends the edited values not the originally loaded settings`() = runTest {
+        val loadedSettings = UserSettings(
             qty = 4,
             maxSl = 2.5,
             minTp = 1.0,
             maxConcurrent = 3,
             mode = ExecutionMode.PAPER,
-            brokerKeys = listOf("ABCD****WXYZ"),
+            scanIntervalMin = null,
+            tfMin = null,
+            tfMax = null,
+            patterns = emptyList(),
         )
-        fakeSettingsRepo.fetchResult = SettingsResult.Success(settingsWithMaskedKey)
+        fakeSettingsRepo.fetchResult = SettingsResult.Success(loadedSettings)
+        fakeSettingsRepo.saveResult = ActionResult.Success
 
         val viewModel = createViewModel()
         advanceUntilIdle()
 
-        val uiState = viewModel.uiState.value
-        assertTrue(
-            "uiState must be Ready after fetch with masked broker key, got $uiState",
-            uiState is UiState.Ready<*>,
-        )
+        // The user edits qty from 4 → 10 and maxSl from 2.5 → 5.0
+        val editedQty = 10
+        val editedMaxSl = 5.0
 
-        @Suppress("UNCHECKED_CAST")
-        val data = (uiState as UiState.Ready<UserSettings>).data
-
-        assertTrue(
-            "brokerKeys must be present in the loaded state (read-only display)",
-            data.brokerKeys.isNotEmpty(),
+        viewModel.saveTradingParams(
+            qty = editedQty,
+            maxSl = editedMaxSl,
+            minTp = 1.0,
+            maxConcurrent = 3,
+            mode = ExecutionMode.PAPER,
         )
-        assertTrue(
-            "The masked key must contain '****' (masked sentinel — indicates read-only display value)",
-            data.brokerKeys[0].contains("****"),
+        advanceUntilIdle()
+
+        val args = fakeSettingsRepo.lastSaveArgs
+        assertNotNull("saveTradingParams must have been called", args)
+        assertEquals(
+            "save must forward the EDITED qty (10), not the loaded qty (4)",
+            editedQty,
+            args!!.qty,
+        )
+        assertEquals(
+            "save must forward the EDITED maxSl (5.0), not the loaded maxSl (2.5)",
+            editedMaxSl,
+            args.maxSl ?: 0.0,
+            0.001,
         )
     }
-
-    @Test
-    fun `saveTradingParams does not include masked sentinel in params passed to repository`() =
-        runTest {
-            // The ViewModel MUST NOT forward masked broker-key strings through saveTradingParams.
-            // saveTradingParams only accepts trading params (qty, maxSl, minTp, maxConcurrent, mode);
-            // broker keys are read-only and never appear as saveTradingParams arguments.
-            fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
-            fakeSettingsRepo.saveResult = ActionResult.Success
-
-            val viewModel = createViewModel()
-            advanceUntilIdle()
-
-            viewModel.saveTradingParams(
-                qty = 4,
-                maxSl = null,
-                minTp = null,
-                maxConcurrent = null,
-                mode = null,
-            )
-            advanceUntilIdle()
-
-            val args = fakeSettingsRepo.lastSaveArgs
-            assertNotNull("saveTradingParams must have been called", args)
-
-            // Verify no "****" sentinel leaks through any saveTradingParams argument
-            val modeStr = args!!.mode?.name ?: ""
-            assertFalse(
-                "mode parameter must not contain '****' — masked values must never be forwarded to the repo",
-                modeStr.contains("****"),
-            )
-        }
 
     // =========================================================================
     // 11. setColorTheme(COBALT) → calls AppearanceRepository.setColorTheme(COBALT)
@@ -576,6 +568,230 @@ class SettingsViewModelTest {
                 viewModel.colorTheme.value,
             )
         }
+
+    // =========================================================================
+    // 13. dashboardLayout StateFlow initial value reflects AppearanceRepository
+    //     MOBILE-42: new StateFlow on ViewModel
+    // =========================================================================
+
+    @Test
+    fun `dashboardLayout StateFlow initial value comes from AppearanceRepository`() = runTest {
+        fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+        // FakeAppearanceRepository defaults to DashboardLayout.HERO
+        val viewModel = createViewModel()
+
+        assertEquals(
+            "dashboardLayout StateFlow must initially reflect the AppearanceRepository value (HERO)",
+            DashboardLayout.HERO,
+            viewModel.dashboardLayout.value,
+        )
+    }
+
+    // =========================================================================
+    // 14. setDashboardLayout(GRID) → persists + dashboardLayout StateFlow emits GRID
+    //     MOBILE-42: new method on ViewModel
+    // =========================================================================
+
+    @Test
+    fun `setDashboardLayout GRID calls AppearanceRepository and dashboardLayout emits GRID`() =
+        runTest {
+            fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val setLayoutCallsBefore = fakeAppearanceRepo.setDashboardLayoutCallCount
+
+            viewModel.setDashboardLayout(DashboardLayout.GRID)
+            advanceUntilIdle()
+
+            assertEquals(
+                "setDashboardLayout(GRID) must call AppearanceRepository.setDashboardLayout exactly once",
+                setLayoutCallsBefore + 1,
+                fakeAppearanceRepo.setDashboardLayoutCallCount,
+            )
+            assertEquals(
+                "AppearanceRepository.setDashboardLayout must have received DashboardLayout.GRID",
+                DashboardLayout.GRID,
+                fakeAppearanceRepo.lastDashboardLayoutValue,
+            )
+            assertEquals(
+                "dashboardLayout StateFlow must emit GRID after setDashboardLayout(GRID)",
+                DashboardLayout.GRID,
+                viewModel.dashboardLayout.value,
+            )
+        }
+
+    // =========================================================================
+    // 15. setDashboardLayout(HERO) → persists + dashboardLayout StateFlow emits HERO
+    //     MOBILE-42: new method on ViewModel
+    // =========================================================================
+
+    @Test
+    fun `setDashboardLayout HERO calls AppearanceRepository and dashboardLayout emits HERO`() =
+        runTest {
+            fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+
+            // Start from a non-HERO layout to make the assertion meaningful
+            fakeAppearanceRepo.setDashboardLayoutForTest(DashboardLayout.GRID)
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val setLayoutCallsBefore = fakeAppearanceRepo.setDashboardLayoutCallCount
+
+            viewModel.setDashboardLayout(DashboardLayout.HERO)
+            advanceUntilIdle()
+
+            assertEquals(
+                "setDashboardLayout(HERO) must call AppearanceRepository.setDashboardLayout exactly once",
+                setLayoutCallsBefore + 1,
+                fakeAppearanceRepo.setDashboardLayoutCallCount,
+            )
+            assertEquals(
+                "AppearanceRepository.setDashboardLayout must have received DashboardLayout.HERO",
+                DashboardLayout.HERO,
+                fakeAppearanceRepo.lastDashboardLayoutValue,
+            )
+            assertEquals(
+                "dashboardLayout StateFlow must emit HERO after setDashboardLayout(HERO)",
+                DashboardLayout.HERO,
+                viewModel.dashboardLayout.value,
+            )
+        }
+
+    // =========================================================================
+    // 16. setDashboardLayout(TERMINAL) → persists + dashboardLayout StateFlow emits TERMINAL
+    //     MOBILE-42: new method on ViewModel
+    // =========================================================================
+
+    @Test
+    fun `setDashboardLayout TERMINAL calls AppearanceRepository and dashboardLayout emits TERMINAL`() =
+        runTest {
+            fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val setLayoutCallsBefore = fakeAppearanceRepo.setDashboardLayoutCallCount
+
+            viewModel.setDashboardLayout(DashboardLayout.TERMINAL)
+            advanceUntilIdle()
+
+            assertEquals(
+                "setDashboardLayout(TERMINAL) must call AppearanceRepository.setDashboardLayout exactly once",
+                setLayoutCallsBefore + 1,
+                fakeAppearanceRepo.setDashboardLayoutCallCount,
+            )
+            assertEquals(
+                "AppearanceRepository.setDashboardLayout must have received DashboardLayout.TERMINAL",
+                DashboardLayout.TERMINAL,
+                fakeAppearanceRepo.lastDashboardLayoutValue,
+            )
+            assertEquals(
+                "dashboardLayout StateFlow must emit TERMINAL after setDashboardLayout(TERMINAL)",
+                DashboardLayout.TERMINAL,
+                viewModel.dashboardLayout.value,
+            )
+        }
+
+    // =========================================================================
+    // 17. Load success → scanner fields present in Ready state
+    //     MOBILE-42: UserSettings gains scanIntervalMin, tfMin, tfMax, patterns
+    // =========================================================================
+
+    @Test
+    fun `load success exposes scanner fields in uiState Ready data`() = runTest {
+        val settingsWithScannerParams = UserSettings(
+            qty = 4,
+            maxSl = 2.5,
+            minTp = 1.0,
+            maxConcurrent = 3,
+            mode = ExecutionMode.PAPER,
+            scanIntervalMin = 30,
+            tfMin = 5,
+            tfMax = 60,
+            patterns = listOf("ENGULFING", "PINBAR"),
+        )
+        fakeSettingsRepo.fetchResult = SettingsResult.Success(settingsWithScannerParams)
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val uiState = viewModel.uiState.value
+        assertTrue(
+            "uiState must be Ready after fetch with scanner params, got $uiState",
+            uiState is UiState.Ready<*>,
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val data = (uiState as UiState.Ready<UserSettings>).data
+
+        assertEquals(
+            "scanIntervalMin must be 30 from fetched settings",
+            30,
+            data.scanIntervalMin,
+        )
+        assertEquals(
+            "tfMin must be 5 from fetched settings",
+            5,
+            data.tfMin,
+        )
+        assertEquals(
+            "tfMax must be 60 from fetched settings",
+            60,
+            data.tfMax,
+        )
+        assertNotNull(
+            "patterns must be non-null from fetched settings",
+            data.patterns,
+        )
+        assertEquals(
+            "patterns must contain 2 entries",
+            2,
+            data.patterns?.size,
+        )
+        assertTrue(
+            "patterns must contain ENGULFING",
+            data.patterns?.contains("ENGULFING") == true,
+        )
+    }
+
+    // =========================================================================
+    // Preserved: saveTradingParams does not include masked sentinel
+    // =========================================================================
+
+    @Test
+    fun `saveTradingParams does not include masked sentinel in params passed to repository`() =
+        runTest {
+            // The ViewModel MUST NOT forward masked broker-key strings through saveTradingParams.
+            // saveTradingParams only accepts trading params (qty, maxSl, minTp, maxConcurrent, mode);
+            // broker keys are removed in MOBILE-42.
+            fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+            fakeSettingsRepo.saveResult = ActionResult.Success
+
+            val viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.saveTradingParams(
+                qty = 4,
+                maxSl = null,
+                minTp = null,
+                maxConcurrent = null,
+                mode = null,
+            )
+            advanceUntilIdle()
+
+            val args = fakeSettingsRepo.lastSaveArgs
+            assertNotNull("saveTradingParams must have been called", args)
+
+            // Verify no "****" sentinel leaks through any saveTradingParams argument
+            val modeStr = args!!.mode?.name ?: ""
+            assertFalse(
+                "mode parameter must not contain '****' — masked values must never be forwarded to the repo",
+                modeStr.contains("****"),
+            )
+        }
 }
 
 // =============================================================================
@@ -635,9 +851,7 @@ private class FakeSettingsRepository : SettingsRepository {
  * Hand-written fake [AppearanceRepository].
  * Backed by [MutableStateFlow]s so Flow-based tests can observe reactive updates.
  *
- * Extended in MOBILE-25 to track [lastColorThemeValue] — the value argument passed to the most
- * recent [setColorTheme] call. Tests assert referential identity to confirm the correct enum
- * constant was forwarded.
+ * MOBILE-42: tracks [lastDashboardLayoutValue] for setDashboardLayout assertions.
  */
 private class FakeAppearanceRepository : AppearanceRepository {
 
@@ -660,7 +874,15 @@ private class FakeAppearanceRepository : AppearanceRepository {
     var lastColorThemeValue: ColorTheme? = null
 
     var setDashboardLayoutCallCount: Int = 0
+    /** The [DashboardLayout] value passed to the most recent [setDashboardLayout] call. */
+    var lastDashboardLayoutValue: DashboardLayout? = null
+
     var setBiometricUnlockCallCount: Int = 0
+
+    /** Test helper to preset the layout without incrementing [setDashboardLayoutCallCount]. */
+    fun setDashboardLayoutForTest(layout: DashboardLayout) {
+        _dashboardLayout.value = layout
+    }
 
     override suspend fun setDarkMode(enabled: Boolean) {
         setDarkModeCallCount++
@@ -676,6 +898,7 @@ private class FakeAppearanceRepository : AppearanceRepository {
 
     override suspend fun setDashboardLayout(layout: DashboardLayout) {
         setDashboardLayoutCallCount++
+        lastDashboardLayoutValue = layout
         _dashboardLayout.value = layout
     }
 
