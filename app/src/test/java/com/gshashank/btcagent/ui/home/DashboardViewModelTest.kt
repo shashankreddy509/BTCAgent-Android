@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.gshashank.btcagent.core.NetworkMonitor
 import com.gshashank.btcagent.data.model.BotMode
 import com.gshashank.btcagent.data.model.DashboardData
+import com.gshashank.btcagent.data.model.Position
 import com.gshashank.btcagent.data.model.PriceDirection
 import com.gshashank.btcagent.data.repository.DashboardRepository
 import com.gshashank.btcagent.data.repository.DashboardResult
@@ -76,6 +77,11 @@ class DashboardViewModelTest {
         openUnrealisedPnl = 150.0,
         botRunning = true,
         botMode = BotMode.Paper,
+        scanIntervalMin = 5,
+        brokerName = "Coinbase",
+        longCount = 2,
+        shortCount = 1,
+        positions = emptyList(),
     )
 
     @Before

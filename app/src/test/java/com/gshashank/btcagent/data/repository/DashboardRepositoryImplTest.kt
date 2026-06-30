@@ -25,7 +25,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /**
- * JVM unit tests for [DashboardRepositoryImpl] — MOBILE-5.
+ * JVM unit tests for [DashboardRepositoryImpl] — MOBILE-5, MOBILE-39.
  *
  * Uses [MockWebServer] as the in-process HTTP server so real HTTP responses are received
  * by [DashboardApi] and then mapped by the repository.
@@ -43,6 +43,12 @@ import java.time.format.DateTimeFormatter
  *   5.  401 response → [DashboardResult.Error] (never throws).
  *   6.  500 response → [DashboardResult.Error] (never throws).
  *   7.  Network exception → [DashboardResult.Error] (never throws).
+ *   8.  maps_brokerAccountName_from_dto — broker_account_name maps to DashboardData.brokerName.
+ *   9.  maps_scanIntervalMin_from_dto — settings.scan_interval_min maps to DashboardData.scanIntervalMin.
+ *   10. computes_longCount_and_shortCount — direction field drives longCount/shortCount.
+ *   11. maps_positions_list — positions list is mapped; DashboardData.positions size matches input.
+ *   12. null_brokerAccountName_defaults — absent broker_account_name → "Coinbase", never "null".
+ *   13. absent_scanIntervalMin_defaults_to_zero — absent scan_interval_min → 0.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DashboardRepositoryImplTest {
@@ -315,4 +321,226 @@ class DashboardRepositoryImplTest {
                 result is DashboardResult.Error,
             )
         }
+
+    // =========================================================================
+    // 8. maps_brokerAccountName_from_dto
+    // =========================================================================
+
+    @Test
+    fun `maps_brokerAccountName_from_dto`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    {
+                      "running": false,
+                      "broker_account_name": "Coinbase Pro",
+                      "settings": { "mode": "paper" },
+                      "positions": [],
+                      "history": []
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = repository.fetchState()
+
+        assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+        val data = (result as DashboardResult.Success).data
+        assertEquals(
+            "brokerName must be mapped from broker_account_name in the response",
+            "Coinbase Pro",
+            data.brokerName,
+        )
+    }
+
+    // =========================================================================
+    // 9. maps_scanIntervalMin_from_dto
+    // =========================================================================
+
+    @Test
+    fun `maps_scanIntervalMin_from_dto`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    {
+                      "running": false,
+                      "settings": { "mode": "paper", "scan_interval_min": 5 },
+                      "positions": [],
+                      "history": []
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = repository.fetchState()
+
+        assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+        val data = (result as DashboardResult.Success).data
+        assertEquals(
+            "scanIntervalMin must be mapped from settings.scan_interval_min in the response",
+            5,
+            data.scanIntervalMin,
+        )
+    }
+
+    // =========================================================================
+    // 10. computes_longCount_and_shortCount
+    // =========================================================================
+
+    @Test
+    fun `computes_longCount_and_shortCount`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    {
+                      "running": true,
+                      "settings": { "mode": "live" },
+                      "positions": [
+                        { "signal_id": "s1", "direction": "long",  "entry_price": 65000.0,
+                          "qty": 0.1, "status": "open" },
+                        { "signal_id": "s2", "direction": "long",  "entry_price": 64000.0,
+                          "qty": 0.2, "status": "open" },
+                        { "signal_id": "s3", "direction": "short", "entry_price": 66000.0,
+                          "qty": 0.1, "status": "open" }
+                      ],
+                      "history": []
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = repository.fetchState()
+
+        assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+        val data = (result as DashboardResult.Success).data
+        assertEquals(
+            "longCount must be 2 when 2 positions have direction=long",
+            2,
+            data.longCount,
+        )
+        assertEquals(
+            "shortCount must be 1 when 1 position has direction=short",
+            1,
+            data.shortCount,
+        )
+    }
+
+    // =========================================================================
+    // 11. maps_positions_list
+    // =========================================================================
+
+    @Test
+    fun `maps_positions_list`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    {
+                      "running": true,
+                      "settings": { "mode": "paper" },
+                      "current_price": 67000.0,
+                      "positions": [
+                        { "signal_id": "a1", "direction": "long",  "entry_price": 65000.0,
+                          "qty": 0.1, "status": "open" },
+                        { "signal_id": "a2", "direction": "short", "entry_price": 66000.0,
+                          "qty": 0.1, "status": "open" }
+                      ],
+                      "history": []
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = repository.fetchState()
+
+        assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+        val data = (result as DashboardResult.Success).data
+        assertEquals(
+            "positions list in DashboardData must contain the same number of entries as the " +
+                "positions array in the API response",
+            2,
+            data.positions.size,
+        )
+    }
+
+    // =========================================================================
+    // 12. null_brokerAccountName_defaults
+    // =========================================================================
+
+    @Test
+    fun `null_brokerAccountName_defaults`() = runTest(testDispatcher) {
+        // broker_account_name is explicitly null in the response
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    {
+                      "running": false,
+                      "broker_account_name": null,
+                      "settings": { "mode": "paper" },
+                      "positions": [],
+                      "history": []
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = repository.fetchState()
+
+        assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+        val data = (result as DashboardResult.Success).data
+        assertEquals(
+            "brokerName must default to \"Coinbase\" when broker_account_name is null; " +
+                "must never render the literal string \"null\"",
+            "Coinbase",
+            data.brokerName,
+        )
+    }
+
+    // =========================================================================
+    // 13. absent_scanIntervalMin_defaults_to_zero
+    // =========================================================================
+
+    @Test
+    fun `absent_scanIntervalMin_defaults_to_zero`() = runTest(testDispatcher) {
+        // settings object does not include scan_interval_min at all
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    """
+                    {
+                      "running": false,
+                      "settings": { "mode": "paper" },
+                      "positions": [],
+                      "history": []
+                    }
+                    """.trimIndent(),
+                ),
+        )
+
+        val result = repository.fetchState()
+
+        assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+        val data = (result as DashboardResult.Success).data
+        assertEquals(
+            "scanIntervalMin must default to 0 when scan_interval_min is absent from settings",
+            0,
+            data.scanIntervalMin,
+        )
+    }
 }
