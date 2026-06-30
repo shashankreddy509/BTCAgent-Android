@@ -22,19 +22,31 @@ import javax.inject.Inject
  * @param unrealizedTotal  Sum of [Position.pnl] across all open positions.
  * @param exposureTotal    Sum of (entryPrice * qty * contractSize) per position.
  * @param positions        The full list of open positions.
+ * @param openCount        Number of open positions (equals positions.size) — MOBILE-43.
+ *                         Default 0 preserves backwards-compatibility for callers that omit it.
+ * @param todayPnl         Sum of closed P&L for trades closed today — MOBILE-43.
+ *                         Default 0.0 preserves backwards-compatibility.
+ * @param mode             Trading mode ("paper" or "live") from settings — MOBILE-43.
+ *                         Default "paper" preserves backwards-compatibility.
  */
 data class PositionsScreenData(
     val unrealizedTotal: Double,
     val exposureTotal: Double,
     val positions: List<Position>,
+    val openCount: Int = 0,
+    val todayPnl: Double = 0.0,
+    val mode: String = "paper",
 )
 
 /**
- * ViewModel for the Positions list screen — MOBILE-6.
+ * ViewModel for the Positions list screen — MOBILE-6, MOBILE-43.
  *
  * Starts in [UiState.Loading], fetches on init, and exposes [uiState] as a [StateFlow].
  * Monitors network connectivity via [NetworkMonitor.isOnlineFlow] and transitions to
  * [UiState.Offline] when connectivity is lost.
+ *
+ * MOBILE-43: todayPnl and mode are forwarded from PositionsResult.Success into PositionsScreenData
+ * so the header row can display them without a second repository call.
  */
 @HiltViewModel
 class PositionsListViewModel @Inject constructor(
@@ -80,13 +92,16 @@ class PositionsListViewModel @Inject constructor(
             delay(1L)
             when (val result = repository.fetchPositions()) {
                 is PositionsResult.Success -> {
-                    val positions = result.positions
-                    if (positions.isEmpty()) {
-                        _uiState.value = UiState.Empty
-                    } else {
-                        lastSuccessMs = System.currentTimeMillis()
-                        _uiState.value = UiState.Ready(positions.toScreenData())
-                    }
+                    // Always Ready on a successful fetch — even with zero positions — so the
+                    // header + summary cards (the mock chrome) stay visible. The Ready branch
+                    // shows a "No open positions" message in the list area when empty.
+                    lastSuccessMs = System.currentTimeMillis()
+                    _uiState.value = UiState.Ready(
+                        result.positions.toScreenData(
+                            todayPnl = result.todayPnl,
+                            mode = result.mode,
+                        )
+                    )
                 }
                 is PositionsResult.Error -> {
                     _uiState.value = UiState.Error(
@@ -103,7 +118,7 @@ class PositionsListViewModel @Inject constructor(
         doFetch()
     }
 
-    private fun List<Position>.toScreenData(): PositionsScreenData {
+    private fun List<Position>.toScreenData(todayPnl: Double, mode: String): PositionsScreenData {
         val unrealizedTotal = sumOf { it.pnl }
         val exposureTotal = sumOf { position ->
             val effectiveSize = if (position.contractSize > 0.0) {
@@ -117,6 +132,9 @@ class PositionsListViewModel @Inject constructor(
             unrealizedTotal = unrealizedTotal,
             exposureTotal = exposureTotal,
             positions = this,
+            openCount = this.size,
+            todayPnl = todayPnl,
+            mode = mode,
         )
     }
 }

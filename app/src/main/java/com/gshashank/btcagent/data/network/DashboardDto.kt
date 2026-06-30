@@ -27,6 +27,8 @@ data class PositionDto(
     val qty: Double? = null,
     @SerialName("opened_at") val openedAt: String? = null,
     @SerialName("contract_size") val contractSize: Double? = null,
+    val pattern: String? = null,
+    val tf: Int? = null,
 )
 
 @Serializable

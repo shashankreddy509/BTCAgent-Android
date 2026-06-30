@@ -1,14 +1,19 @@
 package com.gshashank.btcagent.ui.positions
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -16,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,7 +52,7 @@ fun PositionsListScreen(
  *
  * Maps [UiState<PositionsScreenData>] to the appropriate UI:
  *  - Loading → shimmer skeleton (testTag "positions_skeleton")
- *  - Ready   → summary cards + lazy list of position cards
+ *  - Ready   → app-bar header + summary cards + lazy list of position cards
  *  - Empty   → "No open positions" message (testTag "positions_empty")
  *  - Error   → retry button
  *  - Offline → offline banner
@@ -102,26 +108,94 @@ fun PositionsListScreenContent(
 
             is UiState.Ready -> {
                 Column(modifier = Modifier.fillMaxSize()) {
+                    // ── App-bar header: "Positions" + subtitle + PAPER/LIVE pill ──
+                    PositionsHeader(
+                        openCount = uiState.data.openCount,
+                        todayPnl = uiState.data.todayPnl,
+                        mode = uiState.data.mode,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
                     PositionsSummaryCards(
                         unrealizedTotal = uiState.data.unrealizedTotal,
                         exposureTotal = uiState.data.exposureTotal,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                     )
-                    LazyColumn(
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(uiState.data.positions, key = { it.signalId }) { position ->
-                            PositionCard(
-                                position = position,
-                                onClick = { onPositionClick(position.signalId) },
+                    if (uiState.data.positions.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .testTag("positions_empty"),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "No open positions",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                        }
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(uiState.data.positions, key = { it.signalId }) { position ->
+                                PositionCard(
+                                    position = position,
+                                    onClick = { onPositionClick(position.signalId) },
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * App-bar header row for the Positions screen — MOBILE-43.
+ * "Positions" title + "N open · +-$X today" subtitle + PAPER/LIVE pill.
+ */
+@Composable
+private fun PositionsHeader(
+    openCount: Int,
+    todayPnl: Double,
+    mode: String,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column {
+            Text(
+                text = "Positions",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            )
+            val todaySign = if (todayPnl >= 0.0) "+" else ""
+            Text(
+                text = "$openCount open · $todaySign\$${"%.2f".format(todayPnl)} today",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // PAPER/LIVE pill — matches Dashboard StatusPill style
+        val isLive = mode == "live"
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+        ) {
+            Text(
+                text = if (isLive) "LIVE" else "PAPER",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
     }
 }

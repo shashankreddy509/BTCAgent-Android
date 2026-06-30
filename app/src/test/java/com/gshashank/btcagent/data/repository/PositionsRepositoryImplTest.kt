@@ -16,9 +16,11 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.time.LocalDate
+import java.time.ZoneId
 
 /**
- * JVM unit tests for [PositionsRepositoryImpl] — MOBILE-6.
+ * JVM unit tests for [PositionsRepositoryImpl] — MOBILE-6, MOBILE-43.
  *
  * Uses [MockWebServer] as the in-process HTTP server so real HTTP responses are parsed by
  * the Retrofit layer and then mapped by the repository.
@@ -51,6 +53,12 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
  *   h. edit 403 → ActionResult.Error with code 403
  *   i. edit 400 → ActionResult.Error with code 400
  *   j. network exception → PositionsResult.Error (never throws)
+ *   MOBILE-43:
+ *   k. pattern string field mapped from JSON
+ *   l. tf int field mapped from JSON (bare integer, not string)
+ *   m. absent pattern field maps to null
+ *   n. absent tf field maps to null
+ *   o. todayPnl is summed from history[] and included in PositionsResult.Success
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PositionsRepositoryImplTest {
@@ -68,6 +76,7 @@ class PositionsRepositoryImplTest {
      * current_price is at ROOT level (not per-position).
      * positions[] items carry: signal_id, entry_price, qty, direction, contract_size,
      * sl, tp, opened_at, status, mode — pnl is null (open position).
+     * MOBILE-43: optional pattern (String) and tf (Int, bare integer minutes) fields.
      */
     private fun tradingStateJson(
         currentPrice: Double,
@@ -78,12 +87,16 @@ class PositionsRepositoryImplTest {
         contractSize: Double? = 0.001,
         sl: Double = 49_000.0,
         tp: Double = 53_000.0,
+        pattern: String? = null,
+        tf: Int? = null,
     ): String {
         val contractSizeField = if (contractSize != null) {
             """"contract_size": $contractSize,"""
         } else {
             ""
         }
+        val patternField = if (pattern != null) """"pattern": "$pattern",""" else ""
+        val tfField = if (tf != null) """"tf": $tf,""" else ""  // tf is a bare INTEGER in JSON
         return """
         {
           "running": true,
@@ -96,6 +109,8 @@ class PositionsRepositoryImplTest {
               "qty": $qty,
               "direction": "$direction",
               $contractSizeField
+              $patternField
+              $tfField
               "sl": $sl,
               "tp": $tp,
               "opened_at": "2026-06-24T10:00:00Z",
@@ -485,4 +500,158 @@ class PositionsRepositoryImplTest {
             0.0001,
         )
     }
+
+    // =========================================================================
+    // MOBILE-43: k. pattern string field mapped from JSON
+    // =========================================================================
+
+    @Test
+    fun `pattern string field is mapped from JSON`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    tradingStateJson(
+                        currentPrice = 51_000.0,
+                        pattern = "4-Flag",
+                        tf = 240,
+                    )
+                ),
+        )
+
+        val result = repository.fetchPositions()
+
+        assertTrue("Must be Success, got $result", result is PositionsResult.Success)
+        val positions = (result as PositionsResult.Success).positions
+        assertEquals("pattern must be mapped from JSON string", "4-Flag", positions[0].pattern)
+    }
+
+    // =========================================================================
+    // MOBILE-43: l. tf int field mapped from JSON (bare integer in minutes)
+    // =========================================================================
+
+    @Test
+    fun `tf int field is mapped from JSON as integer minutes`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(
+                    tradingStateJson(
+                        currentPrice = 51_000.0,
+                        pattern = "4-Flag",
+                        tf = 240,
+                    )
+                ),
+        )
+
+        val result = repository.fetchPositions()
+
+        assertTrue("Must be Success, got $result", result is PositionsResult.Success)
+        val positions = (result as PositionsResult.Success).positions
+        assertEquals(
+            "tf must be mapped from JSON bare integer 240 (NOT a string)",
+            240,
+            positions[0].tf,
+        )
+    }
+
+    // =========================================================================
+    // MOBILE-43: m. absent pattern field maps to null
+    // =========================================================================
+
+    @Test
+    fun `absent pattern field maps to null`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(tradingStateJson(currentPrice = 51_000.0)),
+        )
+
+        val result = repository.fetchPositions()
+
+        assertTrue("Must be Success, got $result", result is PositionsResult.Success)
+        val positions = (result as PositionsResult.Success).positions
+        assertEquals("absent pattern must map to null", null, positions[0].pattern)
+    }
+
+    // =========================================================================
+    // MOBILE-43: n. absent tf field maps to null
+    // =========================================================================
+
+    @Test
+    fun `absent tf field maps to null`() = runTest(testDispatcher) {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "application/json")
+                .setBody(tradingStateJson(currentPrice = 51_000.0)),
+        )
+
+        val result = repository.fetchPositions()
+
+        assertTrue("Must be Success, got $result", result is PositionsResult.Success)
+        val positions = (result as PositionsResult.Success).positions
+        assertEquals("absent tf must map to null", null, positions[0].tf)
+    }
+
+    // =========================================================================
+    // MOBILE-43: o. todayPnl is summed from history[] and included in PositionsResult.Success
+    // =========================================================================
+
+    @Test
+    fun `todayPnl sums today history entries in PositionsResult Success`() =
+        runTest(testDispatcher) {
+            val zone = ZoneId.systemDefault()
+            val todayTs = LocalDate.now(zone)
+                .atStartOfDay(zone)
+                .toInstant()
+                .toString()
+
+            val json = """
+            {
+              "running": true,
+              "current_price": 51000.0,
+              "settings": { "mode": "live" },
+              "positions": [
+                {
+                  "signal_id": "sig-001",
+                  "entry_price": 50000.0,
+                  "qty": 2.0,
+                  "direction": "long",
+                  "contract_size": 0.001,
+                  "sl": 49000.0,
+                  "tp": 53000.0,
+                  "opened_at": "2026-06-24T10:00:00Z",
+                  "status": "open",
+                  "mode": "live"
+                }
+              ],
+              "history": [
+                { "pnl_closed": 150.0, "closed_at": "$todayTs" },
+                { "pnl_closed": 50.0,  "closed_at": "$todayTs" }
+              ]
+            }
+            """.trimIndent()
+
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(json),
+            )
+
+            val result = repository.fetchPositions()
+
+            assertTrue("Must be Success, got $result", result is PositionsResult.Success)
+            val success = result as PositionsResult.Success
+            assertEquals(
+                "todayPnl must sum today history entries: 150.0 + 50.0 = 200.0",
+                200.0,
+                success.todayPnl,
+                0.0001,
+            )
+        }
 }

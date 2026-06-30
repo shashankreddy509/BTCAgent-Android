@@ -115,6 +115,8 @@ class DashboardRepositoryImpl @Inject constructor(
      * Maps a [PositionDto] to a domain [Position] using the same formula as PositionsRepositoryImpl.
      * Returns null for any DTO missing required fields (signalId, entryPrice, qty, or direction).
      *
+     * MOBILE-43: pattern and tf are passed through from the DTO to the domain model.
+     *
      * P&L formula:
      *   - long:  (currentPrice − entryPrice) * effectiveSize
      *   - short: (entryPrice − currentPrice) * effectiveSize
@@ -161,6 +163,8 @@ class DashboardRepositoryImpl @Inject constructor(
             pnl = pnl,
             pnlPct = pnlPct,
             contractSize = contractSize ?: 0.0,
+            pattern = pattern,
+            tf = tf,
         )
     }
 }

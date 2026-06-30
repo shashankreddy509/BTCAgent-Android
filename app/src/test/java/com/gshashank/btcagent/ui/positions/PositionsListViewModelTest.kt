@@ -23,7 +23,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 /**
- * JVM unit tests for [PositionsListViewModel] — MOBILE-6.
+ * JVM unit tests for [PositionsListViewModel] — MOBILE-6, MOBILE-43.
  *
  * Uses [FakePositionsRepository] (hand-written fake) and a mockito-kotlin mock for
  * [NetworkMonitor] so no real network or Android framework calls are made.
@@ -40,6 +40,10 @@ import org.mockito.kotlin.whenever
  *   4. NetworkMonitor offline → UiState.Offline.
  *   5. retry() from Error → Loading → Ready.
  *   6. summary totals = sum of computed unrealized + exposure.
+ *   MOBILE-43:
+ *   7. openCount equals positions.size.
+ *   8. todayPnl propagated from repository result.
+ *   9. mode propagated from repository result.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PositionsListViewModelTest {
@@ -120,7 +124,11 @@ class PositionsListViewModelTest {
     @Test
     fun `fetch success emits Ready with positions list`() = runTest {
         fakeRepo.fetchPositionsResult =
-            PositionsResult.Success(listOf(sampleLongPosition, sampleShortPosition))
+            PositionsResult.Success(
+                positions = listOf(sampleLongPosition, sampleShortPosition),
+                todayPnl = 0.0,
+                mode = "paper",
+            )
 
         val viewModel = createViewModel()
 
@@ -148,12 +156,16 @@ class PositionsListViewModelTest {
     }
 
     // =========================================================================
-    // 2. Empty positions list → UiState.Empty
+    // 2. Empty positions list → UiState.Ready with empty list (header + cards stay visible).
     // =========================================================================
 
     @Test
-    fun `empty positions list emits UiState Empty`() = runTest {
-        fakeRepo.fetchPositionsResult = PositionsResult.Success(emptyList())
+    fun `empty positions list emits Ready with empty list`() = runTest {
+        fakeRepo.fetchPositionsResult = PositionsResult.Success(
+            positions = emptyList(),
+            todayPnl = 0.0,
+            mode = "paper",
+        )
 
         val viewModel = createViewModel()
 
@@ -162,11 +174,15 @@ class PositionsListViewModelTest {
 
             advanceUntilIdle()
 
-            val empty = awaitItem()
+            val state = awaitItem()
             assertTrue(
-                "When positions list is empty the state must be UiState.Empty, got $empty",
-                empty is UiState.Empty,
+                "An empty-but-successful fetch must be Ready (so the header + summary cards " +
+                    "still render), got $state",
+                state is UiState.Ready,
             )
+            val data = (state as UiState.Ready).data
+            assertTrue("positions list must be empty", data.positions.isEmpty())
+            assertEquals("openCount must be 0", 0, data.openCount)
 
             cancelAndIgnoreRemainingEvents()
         }
@@ -204,7 +220,11 @@ class PositionsListViewModelTest {
     @Test
     fun `NetworkMonitor offline emits UiState Offline`() = runTest {
         fakeRepo.fetchPositionsResult =
-            PositionsResult.Success(listOf(sampleLongPosition))
+            PositionsResult.Success(
+                positions = listOf(sampleLongPosition),
+                todayPnl = 0.0,
+                mode = "live",
+            )
         networkOnlineFlow.value = true
 
         val viewModel = createViewModel()
@@ -246,7 +266,11 @@ class PositionsListViewModelTest {
             assertTrue("Must be Error before retry, got $error", error is UiState.Error)
 
             fakeRepo.fetchPositionsResult =
-                PositionsResult.Success(listOf(sampleLongPosition))
+                PositionsResult.Success(
+                    positions = listOf(sampleLongPosition),
+                    todayPnl = 0.0,
+                    mode = "live",
+                )
 
             viewModel.retry()
 
@@ -275,7 +299,11 @@ class PositionsListViewModelTest {
     fun `summary unrealizedTotal equals sum of position pnl`() = runTest {
         // sampleLongPosition.pnl = 2.0, sampleShortPosition.pnl = 2.0 → total = 4.0
         fakeRepo.fetchPositionsResult =
-            PositionsResult.Success(listOf(sampleLongPosition, sampleShortPosition))
+            PositionsResult.Success(
+                positions = listOf(sampleLongPosition, sampleShortPosition),
+                todayPnl = 0.0,
+                mode = "paper",
+            )
 
         val viewModel = createViewModel()
 
@@ -303,7 +331,11 @@ class PositionsListViewModelTest {
         // sampleLongPosition exposure = 50000 * 2 * 0.001 = 100.0
         // sampleShortPosition exposure = 50000 * 2 * 0.001 = 100.0 → total = 200.0
         fakeRepo.fetchPositionsResult =
-            PositionsResult.Success(listOf(sampleLongPosition, sampleShortPosition))
+            PositionsResult.Success(
+                positions = listOf(sampleLongPosition, sampleShortPosition),
+                todayPnl = 0.0,
+                mode = "paper",
+            )
 
         val viewModel = createViewModel()
 
@@ -320,6 +352,99 @@ class PositionsListViewModelTest {
                 200.0,
                 screenData.exposureTotal,
                 0.0001,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // =========================================================================
+    // MOBILE-43: 7. openCount equals positions.size
+    // =========================================================================
+
+    @Test
+    fun `openCount equals number of positions in screen data`() = runTest {
+        fakeRepo.fetchPositionsResult =
+            PositionsResult.Success(
+                positions = listOf(sampleLongPosition, sampleShortPosition),
+                todayPnl = 0.0,
+                mode = "paper",
+            )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertEquals(UiState.Loading, awaitItem())
+            advanceUntilIdle()
+
+            val ready = awaitItem()
+            assertTrue("Must be Ready", ready is UiState.Ready)
+            val screenData = (ready as UiState.Ready<PositionsScreenData>).data
+            assertEquals("openCount must equal positions.size", 2, screenData.openCount)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // =========================================================================
+    // MOBILE-43: 8. todayPnl propagated from repository result
+    // =========================================================================
+
+    @Test
+    fun `todayPnl is propagated from PositionsResult Success into PositionsScreenData`() = runTest {
+        fakeRepo.fetchPositionsResult =
+            PositionsResult.Success(
+                positions = listOf(sampleLongPosition),
+                todayPnl = 184.20,
+                mode = "live",
+            )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertEquals(UiState.Loading, awaitItem())
+            advanceUntilIdle()
+
+            val ready = awaitItem()
+            assertTrue("Must be Ready", ready is UiState.Ready)
+            val screenData = (ready as UiState.Ready<PositionsScreenData>).data
+            assertEquals(
+                "todayPnl must be propagated from repository into screen data",
+                184.20,
+                screenData.todayPnl,
+                0.0001,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // =========================================================================
+    // MOBILE-43: 9. mode propagated from repository result
+    // =========================================================================
+
+    @Test
+    fun `mode is propagated from PositionsResult Success into PositionsScreenData`() = runTest {
+        fakeRepo.fetchPositionsResult =
+            PositionsResult.Success(
+                positions = listOf(sampleLongPosition),
+                todayPnl = 0.0,
+                mode = "live",
+            )
+
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertEquals(UiState.Loading, awaitItem())
+            advanceUntilIdle()
+
+            val ready = awaitItem()
+            assertTrue("Must be Ready", ready is UiState.Ready)
+            val screenData = (ready as UiState.Ready<PositionsScreenData>).data
+            assertEquals(
+                "mode must be propagated from repository into screen data",
+                "live",
+                screenData.mode,
             )
 
             cancelAndIgnoreRemainingEvents()
