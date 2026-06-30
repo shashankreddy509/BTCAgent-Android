@@ -3,6 +3,7 @@ package com.gshashank.btcagent.di
 import com.gshashank.btcagent.BuildConfig
 import com.gshashank.btcagent.data.network.AccessApi
 import com.gshashank.btcagent.data.network.BriefingApi
+import com.gshashank.btcagent.data.network.BrokerApi
 import com.gshashank.btcagent.data.network.CatalogApi
 import com.gshashank.btcagent.data.network.DashboardApi
 import com.gshashank.btcagent.data.network.LiquidityApi
@@ -203,6 +204,12 @@ object NetworkModule {
     @Singleton
     fun provideUsersApi(retrofit: Retrofit): UsersApi =
         retrofit.create(UsersApi::class.java)
+
+    // BrokerApi uses the AUTHENTICATED Retrofit — broker settings endpoints require the Firebase token.
+    @Provides
+    @Singleton
+    fun provideBrokerApi(retrofit: Retrofit): BrokerApi =
+        retrofit.create(BrokerApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.
