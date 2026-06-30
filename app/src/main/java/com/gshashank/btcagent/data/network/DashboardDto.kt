@@ -12,6 +12,14 @@ data class TradingStateDto(
     @SerialName("current_price") val currentPrice: Double = 0.0,
     @SerialName("manual_pending") val manualPending: List<ManualPendingDto> = emptyList(),
     @SerialName("broker_account_name") val brokerAccountName: String? = null,
+    // 24h price change (BTCWEB-52). Whole object is null when the ticker fetch fails.
+    @SerialName("price_24h") val price24h: Price24hDto? = null,
+)
+
+@Serializable
+data class Price24hDto(
+    @SerialName("change_usd") val changeUsd: Double,
+    @SerialName("change_pct") val changePct: Double,
 )
 
 @Serializable

@@ -74,6 +74,8 @@ fun DashboardHeroContent(
             direction = data.priceDirection,
             brokerName = data.brokerName,
             botMode = data.botMode,
+            change24hUsd = data.price24hChangeUsd,
+            change24hPct = data.price24hChangePct,
         )
         // 2-column stats: Today's P&L | Open Positions
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -208,7 +210,14 @@ private fun StatusPill(text: String, textColor: Color, bg: Color, border: Boolea
 }
 
 @Composable
-private fun PriceHeroCard(price: Double, direction: PriceDirection, brokerName: String, botMode: BotMode) {
+private fun PriceHeroCard(
+    price: Double,
+    direction: PriceDirection,
+    brokerName: String,
+    botMode: BotMode,
+    change24hUsd: Double?,
+    change24hPct: Double?,
+) {
     val targetColor = when (direction) {
         PriceDirection.Up -> BtcPriceUp
         PriceDirection.Down -> BtcPriceDown
@@ -263,7 +272,20 @@ private fun PriceHeroCard(price: Double, direction: PriceDirection, brokerName: 
                 )
                 Text(text = arrow, style = MaterialTheme.typography.titleMedium, color = animatedColor)
             }
-            // 24h change + sparkline intentionally absent (BTCWEB-52 / dropped).
+            // 24h change line — shown only when the backend served it (null on ticker failure).
+            // Sparkline intentionally absent (dropped — not requested).
+            if (change24hUsd != null && change24hPct != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                val up = change24hUsd >= 0.0
+                val changeColor = if (up) BtcPriceUp else BtcPriceDown
+                val sign = if (up) "+" else "-"
+                Text(
+                    text = "$sign\$" + "%,.2f".format(kotlin.math.abs(change24hUsd)) +
+                        "  $sign" + "%.2f".format(kotlin.math.abs(change24hPct)) + "%  ·  24h",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = changeColor,
+                )
+            }
         }
     }
 }

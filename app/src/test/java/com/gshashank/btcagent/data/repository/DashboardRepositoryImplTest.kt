@@ -271,6 +271,66 @@ class DashboardRepositoryImplTest {
         }
 
     // =========================================================================
+    // MOBILE-44: 24h price change (BTCWEB-52) — nested price_24h object.
+    // =========================================================================
+
+    @Test
+    fun `price_24h object maps to DashboardData change fields`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "running": true,
+                          "settings": { "mode": "paper" },
+                          "positions": [],
+                          "history": [],
+                          "price_24h": { "change_usd": 2114.30, "change_pct": -2.31 }
+                        }
+                        """.trimIndent(),
+                    ),
+            )
+
+            val result = repository.fetchState()
+
+            assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+            val data = (result as DashboardResult.Success).data
+            assertEquals("change_usd must map", 2114.30, data.price24hChangeUsd!!, 0.001)
+            assertEquals("change_pct must map", -2.31, data.price24hChangePct!!, 0.001)
+        }
+
+    @Test
+    fun `absent price_24h leaves change fields null`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(
+                        """
+                        {
+                          "running": false,
+                          "settings": { "mode": "paper" },
+                          "positions": [],
+                          "history": [],
+                          "price_24h": null
+                        }
+                        """.trimIndent(),
+                    ),
+            )
+
+            val result = repository.fetchState()
+
+            assertTrue("Must be Success, got $result", result is DashboardResult.Success)
+            val data = (result as DashboardResult.Success).data
+            assertEquals("null price_24h → null usd", null, data.price24hChangeUsd)
+            assertEquals("null price_24h → null pct", null, data.price24hChangePct)
+        }
+
+    // =========================================================================
     // 5. 401 response → DashboardResult.Error (never throws)
     // =========================================================================
 
