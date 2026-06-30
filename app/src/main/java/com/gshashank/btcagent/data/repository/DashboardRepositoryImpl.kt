@@ -100,6 +100,8 @@ class DashboardRepositoryImpl @Inject constructor(
                     longCount = longCount,
                     shortCount = shortCount,
                     positions = positions,
+                    price24hChangeUsd = body.price24h?.changeUsd,
+                    price24hChangePct = body.price24h?.changePct,
                 )
             )
         } catch (e: CancellationException) {

@@ -19,6 +19,9 @@ data class DashboardData(
     val longCount: Int = 0,
     val shortCount: Int = 0,
     val positions: List<Position> = emptyList(),
+    // 24h price change (BTCWEB-52 / MOBILE-44). Null when the backend ticker fetch failed.
+    val price24hChangeUsd: Double? = null,
+    val price24hChangePct: Double? = null,
 )
 
 enum class PriceDirection { Up, Down, Flat }
