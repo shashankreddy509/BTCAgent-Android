@@ -14,6 +14,9 @@ data class TradingStateDto(
     @SerialName("broker_account_name") val brokerAccountName: String? = null,
     // 24h price change (BTCWEB-52). Whole object is null when the ticker fetch fails.
     @SerialName("price_24h") val price24h: Price24hDto? = null,
+    // MOBILE-41: null until the first scan has run — MUST stay nullable.
+    @SerialName("last_scan_time") val lastScanTime: String? = null,
+    @SerialName("signals_today") val signalsToday: Int = 0,
 )
 
 @Serializable
@@ -50,6 +53,11 @@ data class SettingsDto(
     val mode: String = "paper",
     @SerialName("depo_entry_filter") val depoEntryFilter: Boolean = false,
     @SerialName("scan_interval_min") val scanIntervalMin: Int = 0,
+    // MOBILE-41: the STOPPED branch (scanner not in memory) omits ~50 settings keys including
+    // these three — all default to a safe value so parsing never breaks when absent.
+    @SerialName("scanner_autostart") val scannerAutostart: Boolean = false,
+    @SerialName("push_enabled") val pushEnabled: Boolean = false,
+    @SerialName("tf_count") val tfCount: Int = 0,
 )
 
 @Serializable

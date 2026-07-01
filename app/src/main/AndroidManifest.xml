@@ -4,6 +4,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- MOBILE-41: required on Android 13+ (API 33) to post the FCM system notification. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".BtcApplication"
@@ -27,6 +29,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- MOBILE-41: FCM push client. Notification-only payloads (no data key), so the system
+             tray + onMessageReceived both fire only while the app is foregrounded; while
+             backgrounded FCM posts the tray notification itself using this default channel. -->
+        <service
+            android:name=".core.BtcMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="btc_agent_alerts" />
     </application>
 
 </manifest>

@@ -89,6 +89,8 @@ dependencies {
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
+    // Bridges Play Services Task<T> (e.g. FirebaseMessaging.getInstance().token) to suspend via .await() — MOBILE-41.
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Hilt DI
     implementation(libs.hilt.android)
@@ -111,6 +113,7 @@ dependencies {
     // Firebase (google-services plugin applied above)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.firebase.messaging)
 
     // Credential Manager + Google Identity
     implementation(libs.androidx.credentials)

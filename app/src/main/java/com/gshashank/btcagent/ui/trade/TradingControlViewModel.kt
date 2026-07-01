@@ -49,6 +49,8 @@ class TradingControlViewModel @Inject constructor(
     private var _modeJob: Job? = null
     private var _depoJob: Job? = null
     private var _closeJob: Job? = null
+    private var _autostartJob: Job? = null
+    private var _pushJob: Job? = null
 
     init {
         fetchState()
@@ -167,6 +169,46 @@ class TradingControlViewModel @Inject constructor(
             // preventing duplicate close orders for the same position.
             delay(1L)
             when (val result = repository.close(signalId)) {
+                is ActionResult.Success -> {
+                    _actionResult.value = ActionResultUiState.Success
+                    refreshState()
+                }
+                is ActionResult.Error -> {
+                    _actionResult.value = ActionResultUiState.Error(
+                        code = result.code,
+                        message = result.message,
+                    )
+                }
+            }
+        }
+    }
+
+    fun setAutostart(enabled: Boolean) {
+        if (_autostartJob?.isActive == true) return
+        _autostartJob = viewModelScope.launch {
+            // delay(1L): suspension point so the in-flight guard holds against rapid re-taps.
+            delay(1L)
+            when (val result = repository.setAutostart(enabled)) {
+                is ActionResult.Success -> {
+                    _actionResult.value = ActionResultUiState.Success
+                    refreshState()
+                }
+                is ActionResult.Error -> {
+                    _actionResult.value = ActionResultUiState.Error(
+                        code = result.code,
+                        message = result.message,
+                    )
+                }
+            }
+        }
+    }
+
+    fun setPushEnabled(enabled: Boolean) {
+        if (_pushJob?.isActive == true) return
+        _pushJob = viewModelScope.launch {
+            // delay(1L): suspension point so the in-flight guard holds against rapid re-taps.
+            delay(1L)
+            when (val result = repository.setPushEnabled(enabled)) {
                 is ActionResult.Success -> {
                     _actionResult.value = ActionResultUiState.Success
                     refreshState()

@@ -807,6 +807,10 @@ private class FakeTradingControlRepository : TradingControlRepository {
     override suspend fun setMode(mode: String): ActionResult = ActionResult.Success
     override suspend fun setDepoAlerts(enabled: Boolean): ActionResult = ActionResult.Success
     override suspend fun close(signalId: String): ActionResult = ActionResult.Success
+    // MOBILE-41: not exercised by ManualEntryViewModelTest — stub added to satisfy the
+    // TradingControlRepository interface.
+    override suspend fun setAutostart(enabled: Boolean): ActionResult = ActionResult.Success
+    override suspend fun setPushEnabled(enabled: Boolean): ActionResult = ActionResult.Success
 }
 
 /**

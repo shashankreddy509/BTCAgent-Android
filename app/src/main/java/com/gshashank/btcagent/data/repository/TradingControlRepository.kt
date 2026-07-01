@@ -36,4 +36,14 @@ interface TradingControlRepository {
      * Closes an open position by its signal ID.
      */
     suspend fun close(signalId: String): ActionResult
+
+    /**
+     * Enables or disables scanner autostart (scanner_autostart) — MOBILE-41.
+     */
+    suspend fun setAutostart(enabled: Boolean): ActionResult
+
+    /**
+     * Enables or disables push notifications (push_enabled) — MOBILE-41.
+     */
+    suspend fun setPushEnabled(enabled: Boolean): ActionResult
 }

@@ -7,8 +7,10 @@ import com.gshashank.btcagent.data.model.DashboardLayout
 import com.gshashank.btcagent.data.model.ExecutionMode
 import com.gshashank.btcagent.data.model.UserSettings
 import com.gshashank.btcagent.data.repository.ActionResult
+import com.gshashank.btcagent.data.network.FcmTokenProvider
 import com.gshashank.btcagent.data.repository.AppearanceRepository
 import com.gshashank.btcagent.data.repository.AuthRepository
+import com.gshashank.btcagent.data.repository.NotificationsRepository
 import com.gshashank.btcagent.data.repository.SettingsRepository
 import com.gshashank.btcagent.data.repository.SettingsResult
 import com.gshashank.btcagent.ui.components.state.ActionResultUiState
@@ -47,6 +49,8 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val appearanceRepository: AppearanceRepository,
     private val authRepository: AuthRepository,
+    private val notificationsRepository: NotificationsRepository,
+    private val fcmTokenProvider: FcmTokenProvider,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState<UserSettings>>(UiState.Loading)
@@ -172,6 +176,14 @@ class SettingsViewModel @Inject constructor(
 
     fun signOut() {
         viewModelScope.launch {
+            // MOBILE-41: unregister this device's FCM token BEFORE signing out, while the Firebase
+            // session is still valid — the DELETE needs the auth bearer. After signOut() the
+            // AuthInterceptor attaches no token and the backend rejects it, leaving the device
+            // still receiving this account's push. unregister never throws (404/error → inert),
+            // so a failed/absent token never blocks sign-out.
+            fcmTokenProvider.currentToken()?.let { token ->
+                notificationsRepository.unregister(token)
+            }
             authRepository.signOut()
             _navigateToLogin.emit(Unit)
         }

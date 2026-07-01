@@ -9,6 +9,7 @@ import com.gshashank.btcagent.data.network.DashboardApi
 import com.gshashank.btcagent.data.network.LiquidityApi
 import com.gshashank.btcagent.data.network.ManualEntryApi
 import com.gshashank.btcagent.data.network.MarkovApi
+import com.gshashank.btcagent.data.network.NotificationsApi
 import com.gshashank.btcagent.data.network.OpenInterestApi
 import com.gshashank.btcagent.data.network.PositionsApi
 import com.gshashank.btcagent.data.network.PriceWebSocketClient
@@ -210,6 +211,12 @@ object NetworkModule {
     @Singleton
     fun provideBrokerApi(retrofit: Retrofit): BrokerApi =
         retrofit.create(BrokerApi::class.java)
+
+    // NotificationsApi uses the AUTHENTICATED Retrofit — FCM registration is authed + account allow-list.
+    @Provides
+    @Singleton
+    fun provideNotificationsApi(retrofit: Retrofit): NotificationsApi =
+        retrofit.create(NotificationsApi::class.java)
 
     /**
      * Provides a system clock lambda for injection.

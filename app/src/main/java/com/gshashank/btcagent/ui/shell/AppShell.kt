@@ -1,10 +1,18 @@
 package com.gshashank.btcagent.ui.shell
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -43,9 +51,38 @@ import com.gshashank.btcagent.ui.trade.TradingControlScreen
 import com.gshashank.btcagent.ui.trade.manual.ManualEntryScreen
 
 @Composable
-fun AppShell(onSignedOut: () -> Unit = {}) {
+fun AppShell(
+    onSignedOut: () -> Unit = {},
+    pushBootstrapViewModel: PushBootstrapViewModel = hiltViewModel(),
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
+
+    // MOBILE-41: request POST_NOTIFICATIONS (Android 13+) now that the user is past the Gate
+    // (approved). On grant (or if already granted / not required pre-API-33), bootstrap the FCM
+    // token registration. Fire-and-forget — no blocking UI, no dialog beyond the OS prompt.
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            pushBootstrapViewModel.onNotificationPermissionGranted()
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            // Pre-API-33: no runtime permission needed, notifications are allowed by default.
+            pushBootstrapViewModel.onNotificationPermissionGranted()
+        } else if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            pushBootstrapViewModel.onNotificationPermissionGranted()
+        } else {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val currentTab: TabGraph = when {
         navBackStackEntry?.destination?.hierarchy?.any { it.hasRoute(TabGraph.Markets::class) } == true -> TabGraph.Markets

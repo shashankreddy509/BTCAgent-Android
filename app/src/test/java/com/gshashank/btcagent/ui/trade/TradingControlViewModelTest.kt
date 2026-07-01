@@ -47,6 +47,17 @@ import org.junit.Test
  *   12. close(signalId) success → emits ActionResultUiState.Success AND refreshes uiState.
  *   13. error result → ActionResultUiState.Error with message.
  *   14. actionResult resets to null after clearActionResult() is called.
+ *
+ * MOBILE-41 additions (mirrors the setDepoAlerts test pattern exactly, incl. delay(1L)
+ * in-flight guard semantics):
+ *   15. setAutostart(true) success → refreshes uiState.
+ *   16. setAutostart(false) success → refreshes uiState.
+ *   17. second setAutostart() call while first is in-flight is ignored (double-tap guard).
+ *   18. setAutostart() error → ActionResultUiState.Error with code/message.
+ *   19. setPushEnabled(true) success → refreshes uiState.
+ *   20. setPushEnabled(false) success → refreshes uiState.
+ *   21. second setPushEnabled() call while first is in-flight is ignored (double-tap guard).
+ *   22. setPushEnabled() error → ActionResultUiState.Error with code/message.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TradingControlViewModelTest {
@@ -510,6 +521,228 @@ class TradingControlViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    // =========================================================================
+    // MOBILE-41 — setAutostart / setPushEnabled
+    // (mirrors setDepoAlerts exactly: in-flight guard via delay(1L), success → refresh,
+    // double-tap → single repo call, error → ActionResultUiState.Error)
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 15. setAutostart(true) success → refreshes uiState
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setAutostart true success refreshes uiState`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleDataPaper)
+        fakeRepo.setAutostartResult = ActionResult.Success
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val fetchCountBefore = fakeRepo.fetchStateCallCount
+
+        viewModel.setAutostart(true)
+        advanceUntilIdle()
+
+        assertTrue(
+            "setAutostart(true) success must trigger a refresh (fetchState called again)",
+            fakeRepo.fetchStateCallCount > fetchCountBefore,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 16. setAutostart(false) success → refreshes uiState
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setAutostart false success refreshes uiState`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleData)
+        fakeRepo.setAutostartResult = ActionResult.Success
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val fetchCountBefore = fakeRepo.fetchStateCallCount
+
+        viewModel.setAutostart(false)
+        advanceUntilIdle()
+
+        assertTrue(
+            "setAutostart(false) success must trigger a refresh (fetchState called again)",
+            fakeRepo.fetchStateCallCount > fetchCountBefore,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 17. second setAutostart() call while first is in-flight is ignored (double-tap guard)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `second setAutostart call while first is in-flight is ignored (double-tap guard)`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleData)
+        fakeRepo.setAutostartResult = ActionResult.Success
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val callsBefore = fakeRepo.setAutostartCallCount
+
+        // Fire two consecutive calls without letting them complete between calls — the
+        // delay(1L) suspension point inside setAutostart() must keep the in-flight guard
+        // active so the second call is a no-op, exactly like setDepoAlerts/start/stop.
+        viewModel.setAutostart(true)
+        viewModel.setAutostart(true)
+        advanceUntilIdle()
+
+        assertEquals(
+            "Double-tap guard: setAutostart() must only be forwarded to the repo once, not twice",
+            callsBefore + 1,
+            fakeRepo.setAutostartCallCount,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 18. setAutostart() error → ActionResultUiState.Error with code/message
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setAutostart error emits ActionResultUiState Error with code and message`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleData)
+        fakeRepo.setAutostartResult = ActionResult.Error(code = 500, message = "Internal Server Error")
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.actionResult.test {
+            awaitItem() // consume initial null
+
+            viewModel.setAutostart(true)
+            advanceUntilIdle()
+
+            val result = awaitItem()
+            assertTrue(
+                "actionResult must be ActionResultUiState.Error when setAutostart() fails, got $result",
+                result is ActionResultUiState.Error,
+            )
+            val errorResult = result as ActionResultUiState.Error
+            assertEquals(
+                "Error code must be propagated from the ActionResult.Error",
+                500,
+                errorResult.code,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 19. setPushEnabled(true) success → refreshes uiState
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setPushEnabled true success refreshes uiState`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleDataPaper)
+        fakeRepo.setPushEnabledResult = ActionResult.Success
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val fetchCountBefore = fakeRepo.fetchStateCallCount
+
+        viewModel.setPushEnabled(true)
+        advanceUntilIdle()
+
+        assertTrue(
+            "setPushEnabled(true) success must trigger a refresh (fetchState called again)",
+            fakeRepo.fetchStateCallCount > fetchCountBefore,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 20. setPushEnabled(false) success → refreshes uiState
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setPushEnabled false success refreshes uiState`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleData)
+        fakeRepo.setPushEnabledResult = ActionResult.Success
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val fetchCountBefore = fakeRepo.fetchStateCallCount
+
+        viewModel.setPushEnabled(false)
+        advanceUntilIdle()
+
+        assertTrue(
+            "setPushEnabled(false) success must trigger a refresh (fetchState called again)",
+            fakeRepo.fetchStateCallCount > fetchCountBefore,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 21. second setPushEnabled() call while first is in-flight is ignored (double-tap guard)
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `second setPushEnabled call while first is in-flight is ignored (double-tap guard)`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleData)
+        fakeRepo.setPushEnabledResult = ActionResult.Success
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val callsBefore = fakeRepo.setPushEnabledCallCount
+
+        // Fire two consecutive calls without letting them complete between calls — the
+        // delay(1L) suspension point inside setPushEnabled() must keep the in-flight guard
+        // active so the second call is a no-op, exactly like setDepoAlerts/start/stop.
+        viewModel.setPushEnabled(true)
+        viewModel.setPushEnabled(true)
+        advanceUntilIdle()
+
+        assertEquals(
+            "Double-tap guard: setPushEnabled() must only be forwarded to the repo once, not twice",
+            callsBefore + 1,
+            fakeRepo.setPushEnabledCallCount,
+        )
+    }
+
+    // -------------------------------------------------------------------------
+    // 22. setPushEnabled() error → ActionResultUiState.Error with code/message
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setPushEnabled error emits ActionResultUiState Error with code and message`() = runTest {
+        fakeRepo.fetchStateResult = TradingControlResult.Success(sampleData)
+        fakeRepo.setPushEnabledResult = ActionResult.Error(code = 503, message = "Service Unavailable")
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.actionResult.test {
+            awaitItem() // consume initial null
+
+            viewModel.setPushEnabled(true)
+            advanceUntilIdle()
+
+            val result = awaitItem()
+            assertTrue(
+                "actionResult must be ActionResultUiState.Error when setPushEnabled() fails, got $result",
+                result is ActionResultUiState.Error,
+            )
+            val errorResult = result as ActionResultUiState.Error
+            assertEquals(
+                "Error code must be propagated from the ActionResult.Error",
+                503,
+                errorResult.code,
+            )
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
 
 // =============================================================================
@@ -530,6 +763,8 @@ private class FakeTradingControlRepository : TradingControlRepository {
     var setModeResult: ActionResult = ActionResult.Success
     var setDepoAlertsResult: ActionResult = ActionResult.Success
     var closeResult: ActionResult = ActionResult.Success
+    var setAutostartResult: ActionResult = ActionResult.Success
+    var setPushEnabledResult: ActionResult = ActionResult.Success
 
     var fetchStateCallCount: Int = 0
     var startCallCount: Int = 0
@@ -537,6 +772,8 @@ private class FakeTradingControlRepository : TradingControlRepository {
     var setModeCallCount: Int = 0
     var setDepoAlertsCallCount: Int = 0
     var closeCallCount: Int = 0
+    var setAutostartCallCount: Int = 0
+    var setPushEnabledCallCount: Int = 0
 
     override suspend fun fetchState(): TradingControlResult {
         fetchStateCallCount++
@@ -566,5 +803,15 @@ private class FakeTradingControlRepository : TradingControlRepository {
     override suspend fun close(signalId: String): ActionResult {
         closeCallCount++
         return closeResult
+    }
+
+    override suspend fun setAutostart(enabled: Boolean): ActionResult {
+        setAutostartCallCount++
+        return setAutostartResult
+    }
+
+    override suspend fun setPushEnabled(enabled: Boolean): ActionResult {
+        setPushEnabledCallCount++
+        return setPushEnabledResult
     }
 }
