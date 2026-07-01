@@ -79,6 +79,12 @@ class SettingsViewModelTest {
     private lateinit var fakeSettingsRepo: FakeSettingsRepository
     private lateinit var fakeAppearanceRepo: FakeAppearanceRepository
     private lateinit var fakeAuthRepo: FakeAuthRepository
+    private lateinit var fakeNotificationsRepo: FakeNotificationsRepository
+    private lateinit var fakeFcmTokenProvider: FakeFcmTokenProvider
+
+    // Shared monotonic counter so tests can assert the ORDER of cross-collaborator calls
+    // (MOBILE-41: unregister must run BEFORE signOut so the DELETE is authenticated).
+    private val callOrder = java.util.concurrent.atomic.AtomicInteger(0)
 
     // -------------------------------------------------------------------------
     // Stable domain fixtures — MOBILE-42: no brokerKeys field; scanner fields present
@@ -98,9 +104,12 @@ class SettingsViewModelTest {
 
     @Before
     fun setUp() {
+        callOrder.set(0)
         fakeSettingsRepo = FakeSettingsRepository()
         fakeAppearanceRepo = FakeAppearanceRepository()
-        fakeAuthRepo = FakeAuthRepository()
+        fakeAuthRepo = FakeAuthRepository(callOrder)
+        fakeNotificationsRepo = FakeNotificationsRepository(callOrder)
+        fakeFcmTokenProvider = FakeFcmTokenProvider()
     }
 
     private fun createViewModel(): SettingsViewModel =
@@ -108,6 +117,8 @@ class SettingsViewModelTest {
             settingsRepository = fakeSettingsRepo,
             appearanceRepository = fakeAppearanceRepo,
             authRepository = fakeAuthRepo,
+            notificationsRepository = fakeNotificationsRepo,
+            fcmTokenProvider = fakeFcmTokenProvider,
         )
 
     // =========================================================================
@@ -405,6 +416,63 @@ class SettingsViewModelTest {
 
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    // =========================================================================
+    // 8b. MOBILE-41: signOut unregisters the FCM token BEFORE authRepository.signOut()
+    //     so the DELETE is still authenticated (Critical fix — sign-out ordering bug).
+    // =========================================================================
+
+    @Test
+    fun `signOut unregisters FCM token before signing out`() = runTest {
+        fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+        fakeFcmTokenProvider.token = "device-token-123"
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.signOut()
+        advanceUntilIdle()
+
+        assertEquals(
+            "unregister must be called exactly once with the current FCM token",
+            1,
+            fakeNotificationsRepo.unregisterCallCount,
+        )
+        assertEquals(
+            "unregister must use the FCM token",
+            "device-token-123",
+            fakeNotificationsRepo.lastUnregisteredToken,
+        )
+        assertTrue(
+            "unregister (order=${fakeNotificationsRepo.unregisterOrder}) MUST run BEFORE " +
+                "authRepository.signOut() (order=${fakeAuthRepo.signOutOrder}) — otherwise the " +
+                "DELETE goes out unauthenticated and the device keeps receiving push after logout",
+            fakeNotificationsRepo.unregisterOrder < fakeAuthRepo.signOutOrder,
+        )
+    }
+
+    @Test
+    fun `signOut still signs out when no FCM token is available`() = runTest {
+        fakeSettingsRepo.fetchResult = SettingsResult.Success(sampleSettings)
+        fakeFcmTokenProvider.token = null
+
+        val viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.signOut()
+        advanceUntilIdle()
+
+        assertEquals(
+            "no token → no unregister call",
+            0,
+            fakeNotificationsRepo.unregisterCallCount,
+        )
+        assertEquals(
+            "signOut must still proceed with no token available",
+            1,
+            fakeAuthRepo.signOutCallCount,
+        )
     }
 
     // =========================================================================
@@ -914,9 +982,14 @@ private class FakeAppearanceRepository : AppearanceRepository {
  * Hand-written fake [AuthRepository] for SettingsViewModel tests.
  * Only [signOut] is exercised here; other methods are stubs.
  */
-private class FakeAuthRepository : AuthRepository {
+private class FakeAuthRepository(
+    private val callOrder: java.util.concurrent.atomic.AtomicInteger,
+) : AuthRepository {
 
     var signOutCallCount: Int = 0
+
+    /** Order-of-call marker (from the shared counter) at the moment signOut ran; -1 if never. */
+    var signOutOrder: Int = -1
 
     override val currentUser: FirebaseUser? = null
 
@@ -928,5 +1001,36 @@ private class FakeAuthRepository : AuthRepository {
 
     override fun signOut() {
         signOutCallCount++
+        signOutOrder = callOrder.incrementAndGet()
     }
+}
+
+/**
+ * Fake [NotificationsRepository] — MOBILE-41. Records unregister calls + their order so tests can
+ * prove unregister runs BEFORE [FakeAuthRepository.signOut].
+ */
+private class FakeNotificationsRepository(
+    private val callOrder: java.util.concurrent.atomic.AtomicInteger,
+) : com.gshashank.btcagent.data.repository.NotificationsRepository {
+
+    var unregisterCallCount: Int = 0
+    var lastUnregisteredToken: String? = null
+    var unregisterOrder: Int = -1
+
+    override suspend fun register(fcmToken: String): com.gshashank.btcagent.data.repository.NotificationsResult =
+        com.gshashank.btcagent.data.repository.NotificationsResult.Success
+
+    override suspend fun unregister(fcmToken: String): com.gshashank.btcagent.data.repository.NotificationsResult {
+        unregisterCallCount++
+        lastUnregisteredToken = fcmToken
+        unregisterOrder = callOrder.incrementAndGet()
+        return com.gshashank.btcagent.data.repository.NotificationsResult.Success
+    }
+}
+
+/** Fake [FcmTokenProvider] — MOBILE-41. Returns a settable token (null = no token available). */
+private class FakeFcmTokenProvider(
+    var token: String? = "fake-fcm-token",
+) : com.gshashank.btcagent.data.network.FcmTokenProvider {
+    override suspend fun currentToken(): String? = token
 }

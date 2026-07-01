@@ -24,6 +24,10 @@ import javax.inject.Singleton
  * Mode mapping: "live" → [ExecutionMode.LIVE], anything else → [ExecutionMode.PAPER].
  * Positions are mapped using the same P&L calculation as [PositionsRepositoryImpl].
  *
+ * MOBILE-41: also maps lastScanTime/signalsToday (top-level DTO fields, nullable/defaulted for
+ * the STOPPED branch) and scanInterval/tfCount/autostartEnabled/pushEnabled from the nested
+ * settings{} object — all default safely when the backend omits keys.
+ *
  * [setMode] sends only {mode:"live"} or {mode:"paper"} — depoEntryFilter is omitted (null).
  * [setDepoAlerts] sends only {depo_entry_filter:true/false} — mode is omitted (null).
  */
@@ -61,6 +65,12 @@ class TradingControlRepositoryImpl @Inject constructor(
                     mode = mode,
                     depoAlertsEnabled = depoAlertsEnabled,
                     positions = positions,
+                    lastScanTime = body.lastScanTime,
+                    signalsToday = body.signalsToday,
+                    scanInterval = body.settings.scanIntervalMin,
+                    tfCount = body.settings.tfCount,
+                    autostartEnabled = body.settings.scannerAutostart,
+                    pushEnabled = body.settings.pushEnabled,
                 )
             )
         } catch (e: CancellationException) {
@@ -164,6 +174,48 @@ class TradingControlRepositoryImpl @Inject constructor(
             throw e
         } catch (e: Exception) {
             ActionResult.Error(code = -1, message = "Failed to close position")
+        }
+    }
+
+    override suspend fun setAutostart(enabled: Boolean): ActionResult = withContext(ioDispatcher) {
+        try {
+            val response = tradingControlApi.setSettings(
+                SettingsWriteRequest(autostart = enabled)
+            )
+            if (response.isSuccessful) {
+                ActionResult.Success
+            } else {
+                response.errorBody()?.close()
+                ActionResult.Error(
+                    code = response.code(),
+                    message = "Server error (${response.code()})",
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ActionResult.Error(code = -1, message = "Failed to set autostart")
+        }
+    }
+
+    override suspend fun setPushEnabled(enabled: Boolean): ActionResult = withContext(ioDispatcher) {
+        try {
+            val response = tradingControlApi.setSettings(
+                SettingsWriteRequest(pushEnabled = enabled)
+            )
+            if (response.isSuccessful) {
+                ActionResult.Success
+            } else {
+                response.errorBody()?.close()
+                ActionResult.Error(
+                    code = response.code(),
+                    message = "Server error (${response.code()})",
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ActionResult.Error(code = -1, message = "Failed to set push enabled")
         }
     }
 

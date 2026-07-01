@@ -24,6 +24,12 @@ data class SettingsWriteRequest(
     val mode: String? = null,
     @SerialName("depo_entry_filter")
     val depoEntryFilter: Boolean? = null,
+    // MOBILE-41: one-key-per-call — callers set exactly one of these two plus the fields above,
+    // leaving the rest null so they are omitted from the JSON body (explicitNulls = false).
+    @SerialName("scanner_autostart")
+    val autostart: Boolean? = null,
+    @SerialName("push_enabled")
+    val pushEnabled: Boolean? = null,
 )
 
 @Serializable

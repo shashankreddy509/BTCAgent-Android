@@ -79,6 +79,9 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
+        // MOBILE-41: the FCM unregister now runs inside SettingsViewModel.signOut() BEFORE the
+        // Firebase session is torn down (so the DELETE is authenticated); by the time
+        // navigateToLogin emits, unregister has already been attempted. Here we only navigate.
         viewModel.navigateToLogin.collect {
             onSignedOut()
         }

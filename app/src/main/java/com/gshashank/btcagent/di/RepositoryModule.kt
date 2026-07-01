@@ -1,5 +1,7 @@
 package com.gshashank.btcagent.di
 
+import com.gshashank.btcagent.data.network.FcmTokenProvider
+import com.gshashank.btcagent.data.network.FirebaseFcmTokenProvider
 import com.gshashank.btcagent.data.network.FirebaseTokenProvider
 import com.gshashank.btcagent.data.network.TokenProvider
 import com.gshashank.btcagent.data.repository.AccessRepository
@@ -24,6 +26,8 @@ import com.gshashank.btcagent.data.repository.ManualEntryRepository
 import com.gshashank.btcagent.data.repository.ManualEntryRepositoryImpl
 import com.gshashank.btcagent.data.repository.MarkovRepository
 import com.gshashank.btcagent.data.repository.MarkovRepositoryImpl
+import com.gshashank.btcagent.data.repository.NotificationsRepository
+import com.gshashank.btcagent.data.repository.NotificationsRepositoryImpl
 import com.gshashank.btcagent.data.repository.OpenInterestRepository
 import com.gshashank.btcagent.data.repository.OpenInterestRepositoryImpl
 import com.gshashank.btcagent.data.repository.PositionsRepository
@@ -70,6 +74,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTokenProvider(impl: FirebaseTokenProvider): TokenProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindFcmTokenProvider(impl: FirebaseFcmTokenProvider): FcmTokenProvider
 
     @Binds
     @Singleton
@@ -142,4 +150,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBrokerRepository(impl: BrokerRepositoryImpl): BrokerRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindNotificationsRepository(impl: NotificationsRepositoryImpl): NotificationsRepository
 }

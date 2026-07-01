@@ -14,6 +14,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -54,6 +55,20 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
  *   13. fetchState() with null pnl positions → no crash, positions mapped correctly
  *   14. errorBody is closed after non-2xx response
  *   15. CancellationException is rethrown (not swallowed)
+ *
+ * MOBILE-41 additions (Trading Control mock alignment + push):
+ *   16. fetchState() RUNNING branch maps lastScanTime, signalsToday, scanInterval, tfCount,
+ *       autostartEnabled, pushEnabled from the full settings{} object.
+ *   17. fetchState() STOPPED branch (many settings keys omitted, incl. push_enabled/tf_count)
+ *       still parses safely with defaults (false/0) for the omitted fields.
+ *   18. fetchState() last_scan_time explicit null → lastScanTime is null (not "—", not crash).
+ *   19. fetchState() last_scan_time key entirely absent → lastScanTime is null.
+ *   20. setAutostart(true) POSTs body {scanner_autostart:true}, 200 → ActionResult.Success;
+ *       body must NOT contain mode/depo_entry_filter/push_enabled.
+ *   21. setAutostart(false) POSTs body {scanner_autostart:false}, 200 → ActionResult.Success.
+ *   22. setPushEnabled(true) POSTs body {push_enabled:true}, 200 → ActionResult.Success;
+ *       body must NOT contain scanner_autostart.
+ *   23. setPushEnabled(false) POSTs body {push_enabled:false}, 200 → ActionResult.Success.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class TradingControlRepositoryImplTest {
@@ -87,6 +102,83 @@ class TradingControlRepositoryImplTest {
             "depo_entry_filter": $depoEntryFilter
           },
           "positions": $positionsJson,
+          "history": []
+        }
+    """.trimIndent()
+
+    /**
+     * MOBILE-41: RUNNING branch — full settings object, as returned when the scanner is in
+     * memory. Includes last_scan_time, signals_today, and the new settings{} keys
+     * (scanner_autostart, push_enabled, tf_count, scan_interval_min) alongside the ~50 other
+     * real keys the RUNNING branch carries (represented here by a couple of unrelated keys to
+     * prove ignoreUnknownKeys tolerance, matching the real backend shape).
+     */
+    private fun tradingStateRunningFullJson(
+        lastScanTimeJson: String = "\"2026-06-30T12:00:00Z\"",
+        signalsToday: Int = 3,
+        mode: String = "live",
+        scannerAutostart: Boolean = true,
+        pushEnabled: Boolean = true,
+        tfCount: Int = 4,
+        scanIntervalMin: Int = 15,
+        depoEntryFilter: Boolean = false,
+    ): String = """
+        {
+          "running": true,
+          "current_price": 51000.0,
+          "last_scan_time": $lastScanTimeJson,
+          "signals_today": $signalsToday,
+          "settings": {
+            "mode": "$mode",
+            "depo_entry_filter": $depoEntryFilter,
+            "scan_interval_min": $scanIntervalMin,
+            "scanner_autostart": $scannerAutostart,
+            "push_enabled": $pushEnabled,
+            "tf_count": $tfCount,
+            "some_other_running_only_key": "ignored",
+            "another_running_only_key": 123
+          },
+          "positions": [],
+          "history": []
+        }
+    """.trimIndent()
+
+    /**
+     * MOBILE-41: STOPPED branch — scanner not in memory, settings{} omits ~50 keys including
+     * (in this fixture) push_enabled and tf_count, to prove parsing stays safe when many keys
+     * are absent. scanner_autostart IS present here to prove partial-presence also parses fine.
+     * last_scan_time is null (no scan has ever run).
+     */
+    private fun tradingStateStoppedMinimalJson(): String = """
+        {
+          "running": false,
+          "current_price": 0.0,
+          "last_scan_time": null,
+          "signals_today": 0,
+          "settings": {
+            "mode": "paper",
+            "depo_entry_filter": false,
+            "scanner_autostart": false
+          },
+          "positions": [],
+          "history": []
+        }
+    """.trimIndent()
+
+    /**
+     * MOBILE-41: STOPPED branch with last_scan_time entirely ABSENT from the JSON (not just
+     * null) — covers the case where the backend omits the key altogether rather than sending
+     * an explicit null, which must also default safely to null on our side.
+     */
+    private fun tradingStateStoppedNoScanKeyJson(): String = """
+        {
+          "running": false,
+          "current_price": 0.0,
+          "settings": {
+            "mode": "paper",
+            "depo_entry_filter": false
+          },
+          "positions": [],
           "history": []
         }
     """.trimIndent()
@@ -573,6 +665,291 @@ class TradingControlRepositoryImplTest {
                 "An IOException must NOT be rethrown as CancellationException — " +
                     "only real CancellationExceptions should propagate",
                 caughtCancellation,
+            )
+        }
+
+    // =========================================================================
+    // MOBILE-41 — Trading Control mock alignment + push
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // 16. fetchState() RUNNING branch maps all new fields correctly
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `fetchState RUNNING branch maps lastScanTime signalsToday scanInterval tfCount autostart and push`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(
+                        tradingStateRunningFullJson(
+                            lastScanTimeJson = "\"2026-06-30T12:00:00Z\"",
+                            signalsToday = 3,
+                            scannerAutostart = true,
+                            pushEnabled = true,
+                            tfCount = 4,
+                            scanIntervalMin = 15,
+                        ),
+                    ),
+            )
+
+            val result = repository.fetchState()
+
+            assertTrue(
+                "RUNNING branch with full settings must parse to TradingControlResult.Success, got $result",
+                result is TradingControlResult.Success,
+            )
+            val data = (result as TradingControlResult.Success).data
+
+            assertEquals(
+                "lastScanTime must be mapped from last_scan_time",
+                "2026-06-30T12:00:00Z",
+                data.lastScanTime,
+            )
+            assertEquals("signalsToday must be mapped from signals_today", 3, data.signalsToday)
+            assertEquals(
+                "scanInterval must be mapped from settings.scan_interval_min",
+                15,
+                data.scanInterval,
+            )
+            assertEquals("tfCount must be mapped from settings.tf_count", 4, data.tfCount)
+            assertTrue(
+                "autostartEnabled must be true when settings.scanner_autostart is true",
+                data.autostartEnabled,
+            )
+            assertTrue(
+                "pushEnabled must be true when settings.push_enabled is true",
+                data.pushEnabled,
+            )
+        }
+
+    // -------------------------------------------------------------------------
+    // 17. fetchState() STOPPED branch — many settings keys omitted, still parses safely
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `fetchState STOPPED branch with omitted settings keys still parses safely with defaults`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(tradingStateStoppedMinimalJson()),
+            )
+
+            val result = repository.fetchState()
+
+            assertTrue(
+                "STOPPED branch (settings omits ~50 keys incl. push_enabled/tf_count) must still " +
+                    "parse to TradingControlResult.Success, got $result",
+                result is TradingControlResult.Success,
+            )
+            val data = (result as TradingControlResult.Success).data
+
+            assertFalse("running must be false in the STOPPED branch", data.running)
+            assertNull(
+                "lastScanTime must be null when last_scan_time is explicit null",
+                data.lastScanTime,
+            )
+            assertEquals("signalsToday must default to 0", 0, data.signalsToday)
+            assertFalse(
+                "pushEnabled must default to false when push_enabled key is omitted",
+                data.pushEnabled,
+            )
+            assertEquals(
+                "tfCount must default to 0 when tf_count key is omitted",
+                0,
+                data.tfCount,
+            )
+            assertFalse(
+                "autostartEnabled must be false because scanner_autostart is explicitly false " +
+                    "in this fixture (partial-presence case)",
+                data.autostartEnabled,
+            )
+        }
+
+    // -------------------------------------------------------------------------
+    // 18. fetchState() last_scan_time explicit null → lastScanTime is null
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `fetchState last_scan_time explicit null maps to null lastScanTime`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(tradingStateRunningFullJson(lastScanTimeJson = "null")),
+            )
+
+            val result = repository.fetchState()
+
+            assertTrue(result is TradingControlResult.Success)
+            val data = (result as TradingControlResult.Success).data
+            assertNull(
+                "last_scan_time:null in JSON must map to lastScanTime == null (no first scan yet)",
+                data.lastScanTime,
+            )
+        }
+
+    // -------------------------------------------------------------------------
+    // 19. fetchState() last_scan_time key entirely absent → lastScanTime is null
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `fetchState with last_scan_time key entirely absent maps to null lastScanTime`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(tradingStateStoppedNoScanKeyJson()),
+            )
+
+            val result = repository.fetchState()
+
+            assertTrue(
+                "Response with last_scan_time key entirely missing must still parse to Success, got $result",
+                result is TradingControlResult.Success,
+            )
+            val data = (result as TradingControlResult.Success).data
+            assertNull(
+                "Missing last_scan_time key must default to null lastScanTime, not crash",
+                data.lastScanTime,
+            )
+        }
+
+    // -------------------------------------------------------------------------
+    // 20. setAutostart(true) POSTs {scanner_autostart:true}, 200 → ActionResult.Success
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setAutostart true POSTs correct body and returns ActionResult Success`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"status": "ok"}"""),
+            )
+
+            val result = repository.setAutostart(true)
+
+            assertTrue(
+                "HTTP 200 from setAutostart(true) must map to ActionResult.Success, got $result",
+                result is ActionResult.Success,
+            )
+
+            val recordedRequest = mockWebServer.takeRequest()
+            val requestBody = recordedRequest.body.readUtf8()
+            assertTrue(
+                "Request body must contain scanner_autostart:true: got '$requestBody'",
+                requestBody.contains("\"scanner_autostart\"") && requestBody.contains("true"),
+            )
+            assertFalse(
+                "Request body must NOT contain mode for a setAutostart() call: got '$requestBody'",
+                requestBody.contains("\"mode\""),
+            )
+            assertFalse(
+                "Request body must NOT contain depo_entry_filter for a setAutostart() call: got '$requestBody'",
+                requestBody.contains("depo_entry_filter"),
+            )
+            assertFalse(
+                "Request body must NOT contain push_enabled for a setAutostart() call: got '$requestBody'",
+                requestBody.contains("push_enabled"),
+            )
+        }
+
+    // -------------------------------------------------------------------------
+    // 21. setAutostart(false) POSTs {scanner_autostart:false}, 200 → ActionResult.Success
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setAutostart false POSTs correct body and returns ActionResult Success`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"status": "ok"}"""),
+            )
+
+            val result = repository.setAutostart(false)
+
+            assertTrue(
+                "HTTP 200 from setAutostart(false) must map to ActionResult.Success, got $result",
+                result is ActionResult.Success,
+            )
+
+            val recordedRequest = mockWebServer.takeRequest()
+            val requestBody = recordedRequest.body.readUtf8()
+            assertTrue(
+                "Request body must contain scanner_autostart:false: got '$requestBody'",
+                requestBody.contains("\"scanner_autostart\"") && requestBody.contains("false"),
+            )
+        }
+
+    // -------------------------------------------------------------------------
+    // 22. setPushEnabled(true) POSTs {push_enabled:true}, 200 → ActionResult.Success
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setPushEnabled true POSTs correct body and returns ActionResult Success`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"status": "ok"}"""),
+            )
+
+            val result = repository.setPushEnabled(true)
+
+            assertTrue(
+                "HTTP 200 from setPushEnabled(true) must map to ActionResult.Success, got $result",
+                result is ActionResult.Success,
+            )
+
+            val recordedRequest = mockWebServer.takeRequest()
+            val requestBody = recordedRequest.body.readUtf8()
+            assertTrue(
+                "Request body must contain push_enabled:true: got '$requestBody'",
+                requestBody.contains("\"push_enabled\"") && requestBody.contains("true"),
+            )
+            assertFalse(
+                "Request body must NOT contain scanner_autostart for a setPushEnabled() call: got '$requestBody'",
+                requestBody.contains("scanner_autostart"),
+            )
+        }
+
+    // -------------------------------------------------------------------------
+    // 23. setPushEnabled(false) POSTs {push_enabled:false}, 200 → ActionResult.Success
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `setPushEnabled false POSTs correct body and returns ActionResult Success`() =
+        runTest(testDispatcher) {
+            mockWebServer.enqueue(
+                MockResponse()
+                    .setResponseCode(200)
+                    .setHeader("Content-Type", "application/json")
+                    .setBody("""{"status": "ok"}"""),
+            )
+
+            val result = repository.setPushEnabled(false)
+
+            assertTrue(
+                "HTTP 200 from setPushEnabled(false) must map to ActionResult.Success, got $result",
+                result is ActionResult.Success,
+            )
+
+            val recordedRequest = mockWebServer.takeRequest()
+            val requestBody = recordedRequest.body.readUtf8()
+            assertTrue(
+                "Request body must contain push_enabled:false: got '$requestBody'",
+                requestBody.contains("\"push_enabled\"") && requestBody.contains("false"),
             )
         }
 }
