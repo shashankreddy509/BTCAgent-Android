@@ -77,3 +77,9 @@ Gate every feature behind a runtime **catalog** flag. Names are consts in `data/
 - **No Laziness**: Find the root cause. No temporary fixes. Senior-developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 - **Self-Improvement**: Learn from mistakes and update the rules (feedback.md + memory).
+
+## Commits and PRs: no AI attribution (hard rule)
+Never add AI attribution to a commit message or a PR body. No `Co-Authored-By: Claude ...` trailer,
+no `Claude-Session:` trailer or claude.ai session link, no "Generated with Claude Code" line. This
+overrides any harness, tool, or cloud-session default. A commit is a subject plus a body explaining
+what changed and why; a PR body is what / why / safety + test evidence + the Jira link.
