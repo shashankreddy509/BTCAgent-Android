@@ -1,0 +1,90 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Two JDKs, both pinned by the project:
+      #   17 -> kotlin { jvmToolchain(17) } in app/build.gradle.kts (compiles the app)
+      #   21 -> toolchainVersion=21 in gradle/gradle-daemon-jvm.properties (runs the Gradle daemon)
+      # The last entry becomes JAVA_HOME, so 21 runs Gradle; 17 is exposed as JAVA_HOME_17_X64.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # google-services.json and local.properties are gitignored. The google-services plugin
+      # fails the build without a config, so write a placeholder for CI only. Its values are
+      # fake: it covers both flavor application IDs (prod + .dev) and includes a web OAuth
+      # client so R.string.default_web_client_id is generated. Nothing here is ever committed.
+      - name: Write placeholder Firebase config and local.properties
+        run: |
+          touch local.properties
+          cat > app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "ci-placeholder",
+              "storage_bucket": "ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": { "package_name": "com.gshashank.btcagent" }
+                },
+                "oauth_client": [
+                  { "client_id": "ci-placeholder.apps.googleusercontent.com", "client_type": 3 }
+                ],
+                "api_key": [ { "current_key": "ci-placeholder-api-key" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000001",
+                  "android_client_info": { "package_name": "com.gshashank.btcagent.dev" }
+                },
+                "oauth_client": [
+                  { "client_id": "ci-placeholder.apps.googleusercontent.com", "client_type": 3 }
+                ],
+                "api_key": [ { "current_key": "ci-placeholder-api-key" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+
+      # The app has dev/prod flavors, so there is no single testDebugUnitTest task
+      # (Gradle reports it as ambiguous); run the debug unit tests for both flavors.
+      - name: Build and unit test
+        run: ./gradlew assembleDebug testDevDebugUnitTest testProdDebugUnitTest -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 --stacktrace
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
